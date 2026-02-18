@@ -217,16 +217,31 @@ def advise(
     for f, w in optimal_weights.items():
         console.print(f"- {f}: {w*100:.1f}%")
 
-    # --- 7. Allocate ---
+    # --- 7. Calculate Advanced Metrics ---
+    # A. Optimized Portfolio Stats
+    optimized_stats = optimizer.get_advanced_stats(optimal_weights)
+    
+    # B. Current Portfolio Stats (Reconstructed)
+    # We need to normalize current equity holdings to weights summing to 1
+    total_equity_value = sum(equity_holdings_optimized.values())
+    current_weights = {k: v / total_equity_value for k, v in equity_holdings_optimized.items()}
+    current_stats = optimizer.get_advanced_stats(current_weights)
+    
+    console.print("\n[bold]Portfolio Health Check:[/bold]")
+    console.print(f"Current Sharpe: {current_stats['Sharpe Ratio']:.2f} | Optimized Sharpe: {optimized_stats['Sharpe Ratio']:.2f}")
+
+    # --- 8. Allocate ---
     # We distribute the debt capital ONLY to the optimized funds
     allocator = Allocator(equity_holdings_optimized, debt_capital, optimal_weights, months)
     transfers = allocator.calculate_transfers()
     summary = allocator.get_summary()
 
-    # --- 8. Report ---
+    # --- 9. Report ---
     reporter = Reporter()
     # pass all equity holdings or only optimized? For now optimized logic.
-    report_path = reporter.generate_report(summary, optimal_weights, transfers, duration=months)
+    report_path = reporter.generate_report(summary, optimal_weights, transfers, duration=months, 
+                                           current_stats=current_stats, 
+                                           optimized_stats=optimized_stats)
     
     console.print(f"\n[bold green]Success![/bold green] Report saved to: [link={report_path}]{report_path}[/link]")
 

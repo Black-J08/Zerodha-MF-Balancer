@@ -80,12 +80,68 @@ class PortfolioOptimizer:
         cleaned_weights = ef.get_clean_weights()
         return cleaned_weights
 
-    def get_performance_stats(self):
-        """Return (expected_return, volatility, sharpe_ratio)"""
-        if self.weights is None:
-            return None
-        
-        # We need to reconstruct EF to get performance
+    def get_portfolio_stats(self, weights):
+        """
+        Calculate basic performance stats for a given set of weights.
+        Returns: (expected_return, volatility, sharpe_ratio)
+        """
+        if self.mu is None or self.S is None:
+            self.calculate_metrics()
+            
         ef = EfficientFrontier(self.mu, self.S)
-        ef.set_weights(self.weights)
+        ef.set_weights(weights)
         return ef.portfolio_performance(verbose=False)
+
+    def get_advanced_stats(self, weights):
+        """
+        Calculate advanced risk metrics: Sortino Ratio, Max Drawdown, VaR.
+        Returns: Dictionary of metrics.
+        """
+        if self.mu is None or self.S is None:
+            self.calculate_metrics()
+
+        # 1. Basic Stats
+        ret, vol, sharpe = self.get_portfolio_stats(weights)
+        
+        # 2. Historical Portfolio Returns (reconstructed)
+        # We project the weighted portfolio onto historical returns
+        pct_change = self.nav_data.dropna().pct_change().dropna()
+        
+        # Filter pct_change to only include assets in weights (handling 0 weights correctly)
+        # Weights might contain assets not in pct_change if we messed up, so intersection is key
+        common_assets = list(set(weights.keys()) & set(pct_change.columns))
+        
+        # Normalize weights for the subset (in case some are missing, though shouldn't happen)
+        # Ideally weights sum to 1. Here we assume input weights are valid for the cleaned_data.
+        
+        portfolio_returns = pd.Series(0, index=pct_change.index)
+        for asset, weight in weights.items():
+            if asset in pct_change.columns:
+                portfolio_returns += pct_change[asset] * weight
+        
+        # 3. Sortino Ratio (Downside Risk)
+        # Risk-free rate 7% annual -> ~0.027% daily? No, stick to annual for ratio
+        # Sortino = (R - Rf) / Downside Deviation
+        target_return = 0
+        downside_returns = portfolio_returns[portfolio_returns < target_return]
+        downside_deviation = downside_returns.std() * (252**0.5) # Annualized
+        
+        sortino = (ret - 0.07) / downside_deviation if downside_deviation != 0 else 0
+        
+        # 4. Max Drawdown
+        cumulative_returns = (1 + portfolio_returns).cumprod()
+        peak = cumulative_returns.cummax()
+        drawdown = (cumulative_returns - peak) / peak
+        max_drawdown = drawdown.min()
+        
+        # 5. Value at Risk (VaR) - 95% Confidence
+        var_95 = portfolio_returns.quantile(0.05)
+        
+        return {
+            "Expected Return": ret,
+            "Volatility": vol,
+            "Sharpe Ratio": sharpe,
+            "Sortino Ratio": sortino,
+            "Max Drawdown": max_drawdown,
+            "VaR (95%)": var_95
+        }

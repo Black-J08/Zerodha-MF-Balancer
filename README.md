@@ -54,6 +54,8 @@ Run the main script:
 3.  **Source Selection**: You will see a table of your funds. Enter the ID of the **Debt Fund** you want to use as the source of money.
 4.  **Optimization**: The script fetches historical data, calculates the optimal equity split, and determines the exact transfer amounts.
 5.  **Report**: A detailed Markdown report is saved to `mf_balancer/output/report_YYYY-MM-DD_....md`.
+    -   Includes a **Portfolio Health Check** comparing your current stats vs. the optimized portfolio (Sharpe, Sortino, Drawdown).
+    -   Provides a clear **Monthly STP Plan**.
 
 ## 📊 The Strategy: Target Duration Convergence
 

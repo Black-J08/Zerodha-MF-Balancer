@@ -9,6 +9,7 @@
     - [x] Optimizes portfolio weights for **Maximum Sharpe Ratio** using `PyPortfolioOpt`.
     - [x] Uses **Ledoit-Wolf Shrinkage** for covariance estimation (Industry Standard stability).
     - [x] **Interactive Constrained Optimization**: Allows users to set **Min/Max limits** per fund (e.g., "Max 20%") to ensure diversification.
+    - [x] **Detailed Portfolio Metrics**: Provides a side-by-side "Health Check" comparing your **Current vs. Optimized** portfolio on Sharpe Ratio, Sortino Ratio, and Max Drawdown.
 - [x] **Target Duration STP**: Systematically transfers debt capital to equity to achieve optimal allocation over a set timeframe.
 
 ### User Experience

@@ -14,7 +14,8 @@ class Reporter:
                         optimal_weights, 
                         transfers, 
                         duration=12,
-                        market_context=None):
+                        current_stats=None,
+                        optimized_stats=None):
         """
         Generates a Markdown report and saves it.
         """
@@ -40,13 +41,47 @@ The following weights were calculated using Maximum Sharpe Ratio optimization:
 | :--- | :--- | :--- |
 """
         
-        # Add Allocation Table
+        # Add Allocation Table Rows
         total_projected = allocator_summary['Total_Projected']
-        for fund, weight in optimal_weights.items():
-            target_val = weight * total_projected
-            md_content += f"| {fund} | {weight*100:.2f}% | ₹{target_val:,.2f} |\n"
+        # Sort by weight descending
+        sorted_weights = dict(sorted(optimal_weights.items(), key=lambda item: item[1], reverse=True))
+        
+        for fund, weight in sorted_weights.items():
+            if weight > 0.001: # Show only significant allocations (>0.1%)
+                target_val = weight * total_projected
+                md_content += f"| {fund} | {weight*100:.2f}% | ₹{target_val:,.2f} |\n"
+            else:
+                 pass # Skip 0% rows to keep report clean
 
-        md_content += "\n## 3. Recommended Monthly STP Plan\n"
+        # --- 3. Portfolio Health Check ---
+        md_content += "\n## 3. Portfolio Health Check (Current vs. Optimized)\n"
+        md_content += "Here is why the optimized portfolio is mathematically superior:\n\n"
+
+        md_content += "| Metric | Current Portfolio | Optimized Portfolio | Improvement |\n"
+        md_content += "| :--- | :--- | :--- | :--- |\n"
+        
+        # Helper for improvement string
+        def fmt_imp(val, is_risk=False):
+            icon = "✅" if (val > 0 and not is_risk) or (val < 0 and is_risk) else "🔻"
+            return f"{icon} {val:+.1%}" if isinstance(val, float) else f"{icon} {val:+.2f}"
+
+        imp_ret = optimized_stats['Expected Return'] - current_stats['Expected Return']
+        imp_vol = optimized_stats['Volatility'] - current_stats['Volatility']
+        imp_sharpe = optimized_stats['Sharpe Ratio'] - current_stats['Sharpe Ratio']
+        imp_dd = optimized_stats['Max Drawdown'] - current_stats['Max Drawdown']
+        imp_sortino = optimized_stats['Sortino Ratio'] - current_stats['Sortino Ratio']
+
+        md_content += f"| **Annual Return** | {current_stats['Expected Return']:.1%} | **{optimized_stats['Expected Return']:.1%}** | {fmt_imp(imp_ret)} |\n"
+        md_content += f"| **Volatility (Risk)** | {current_stats['Volatility']:.1%} | {optimized_stats['Volatility']:.1%} | {fmt_imp(imp_vol, is_risk=True)} |\n"
+        md_content += f"| **Sharpe Ratio** | {current_stats['Sharpe Ratio']:.2f} | **{optimized_stats['Sharpe Ratio']:.2f}** | {fmt_imp(imp_sharpe)} |\n"
+        md_content += f"| **Max Drawdown** | {current_stats['Max Drawdown']:.1%} | {optimized_stats['Max Drawdown']:.1%} | {fmt_imp(imp_dd)} |\n"
+        md_content += f"| **Sortino Ratio** | {current_stats['Sortino Ratio']:.2f} | **{optimized_stats['Sortino Ratio']:.2f}** | {fmt_imp(imp_sortino)} |\n"
+
+        md_content += "\n> **Interpretation**:\n"
+        md_content += "> *   **Higher Sharpe/Sortino** = Better return for every unit of risk taken.\n"
+        md_content += "> *   **Lower Volatility/Drawdown** = Smoother ride, less crash-prone.\n"
+
+        md_content += "\n## 4. Recommended Monthly STP Plan\n"
         md_content += "You can set up the following **Systematic Transfer Plans (STP)** to automate your investment:\n\n"
         
         md_content += "| Source (Debt) | Target (Equity) | Monthly Installment | Duration |\n| :--- | :--- | :--- | :--- |\n"
@@ -65,7 +100,7 @@ The following weights were calculated using Maximum Sharpe Ratio optimization:
         # Execution Strategy Section
         remaining_debt = allocator_summary.get('Debt_Capital', 0) - (total_transfer * duration)
         
-        md_content += "\n## 4. Execution Strategy Options\n"
+        md_content += "\n## 5. Execution Strategy Options\n"
         md_content += "You have two ways to execute this advice:\n\n"
         md_content += "### Option A: 'Set and Forget' (Static STP)\n"
         md_content += f"- **Action**: Register the STPs listed above with your broker **once**.\n"
