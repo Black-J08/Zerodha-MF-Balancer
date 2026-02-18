@@ -1,0 +1,9 @@
+kiteconnect
+mftool
+PyPortfolioOpt
+pandas
+numpy
+typer
+rich
+python-dotenv
+scikit-learn

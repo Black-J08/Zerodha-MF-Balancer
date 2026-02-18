@@ -1,0 +1,41 @@
+# Environment Variables
+.env
+.env.local
+
+# Python Virtual Environment
+.venv/
+venv/
+env/
+
+# Byte-compiled / Optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / Packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Data & Output (Keep folders, ignore content)
+mf_balancer/data/*
+!mf_balancer/data/.gitkeep
+mf_balancer/output/*
+!mf_balancer/output/.gitkeep
+
+# IDEs
+.vscode/
+.idea/
+*.swp
