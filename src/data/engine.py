@@ -1,19 +1,41 @@
-import os
-import requests
-from datetime import datetime, timedelta
+"""DataEngine: NAV fetching, scheme code resolution, and ISIN mapping.
+
+Central data access component for MF Balancer. Handles:
+- Building and caching the ISIN → scheme code mapping from AMFI NAVAll.txt
+- Resolving Zerodha fund names to AMFI scheme codes (ISIN primary, name fallback)
+- Fetching historical NAV data via mftool
+- Fetching portfolio holdings from Zerodha Kite Connect
+"""
+
 import pandas as pd
-from mftool import Mftool
+import requests
 from kiteconnect import KiteConnect
+from mftool import Mftool
+
+from src.core.config import Config
+from src.core.logging import get_logger
+from src.data.holdings import get_portfolio_holdings
+from src.data.nav import get_historical_nav
 
 AMFI_NAV_ALL_URL = "https://www.amfiindia.com/spages/NAVAll.txt"
 
+logger = get_logger(__name__)
+
 
 class DataEngine:
-    def __init__(self, api_key=None, access_token=None):
+    """Data access engine for mutual fund portfolio operations.
+
+    Args:
+        config: Application configuration containing API credentials and paths.
+    """
+
+    def __init__(self, config: Config):
+        self.config = config
         self.mftool = Mftool()
-        if api_key and access_token:
-            self.kite = KiteConnect(api_key=api_key)
-            self.kite.set_access_token(access_token)
+
+        if config.kite_api_key and config.kite_access_token:
+            self.kite = KiteConnect(api_key=config.kite_api_key)
+            self.kite.set_access_token(config.kite_access_token)
         else:
             self.kite = None
 
@@ -25,9 +47,8 @@ class DataEngine:
         # between Zerodha and AMFI.
         self.isin_to_code = self._build_isin_to_code_map()
 
-    def _build_isin_to_code_map(self):
-        """
-        Fetch AMFI NAVAll.txt and build a mapping from ISIN to scheme metadata.
+    def _build_isin_to_code_map(self) -> dict:
+        """Fetch AMFI NAVAll.txt and build a mapping from ISIN to scheme metadata.
 
         AMFI NAVAll.txt format (semicolon-separated):
           Scheme Code;ISIN Div Payout/ ISIN Growth;ISIN Div Reinvestment;Scheme Name;Plan;Option;NAV;Date
@@ -35,7 +56,7 @@ class DataEngine:
         Returns:
             dict: {isin: {"code": str, "plan": str, "option": str}}
         """
-        isin_map = {}
+        isin_map: dict = {}
         try:
             headers = {"User-Agent": "Chrome/95.0.4638.69"}
             response = requests.get(AMFI_NAV_ALL_URL, headers=headers, timeout=30)
@@ -60,24 +81,23 @@ class DataEngine:
                             "plan": plan,
                             "option": option,
                         }
-        except Exception as e:
-            print(f"[yellow]Warning[/yellow]: Could not build ISIN map from AMFI: {e}")
+        except Exception:  # noqa: BLE001 - Network failures must be caught and logged
+            logger.warning("Could not build ISIN map from AMFI")
 
         return isin_map
 
-    def _validate_plan_option(self, scheme_meta, fund_name):
-        """
-        Validate that a matched scheme matches the expected plan type from the fund name.
+    def _validate_plan_option(self, scheme_meta: dict, fund_name: str) -> bool:
+        """Validate that a matched scheme matches the expected plan type from the fund name.
 
         Prevents incorrect matches such as Parag Parikh Conservative Hybrid Fund
         being matched to Parag Parikh ELSS Tax Saver Fund.
 
         Args:
-            scheme_meta: dict with "code", "plan", "option" from ISIN map
-            fund_name: the Zerodha fund name (e.g. "... - DIRECT PLAN")
+            scheme_meta: dict with "code", "plan", "option" from ISIN map.
+            fund_name: The Zerodha fund name (e.g. "... - DIRECT PLAN").
 
         Returns:
-            bool: True if the scheme's plan/option is compatible with the fund name
+            True if the scheme's plan/option is compatible with the fund name.
         """
         if not scheme_meta:
             return False
@@ -97,15 +117,11 @@ class DataEngine:
             return False
         if "idcw" in name_lower and "idcw" not in option:
             return False
-        if "dividend" in name_lower and "idcw" not in option:
-            return False
 
-        return True
+        return not ("dividend" in name_lower and "idcw" not in option)
 
-    def get_scheme_code_for_fund(self, fund_name, isin=None):
-        """
-        Find the AMFI Scheme Code for a given fund.
-
+    def get_scheme_code_for_fund(self, fund_name: str, isin: str | None = None) -> str | None:
+        """Find the AMFI Scheme Code for a given fund.
         Strategy (in order of reliability):
         1. ISIN-based exact match (primary) — ISIN is a unique identifier,
            validated against plan/option to prevent cross-plan mismatches.
@@ -113,11 +129,11 @@ class DataEngine:
            with plan/option validation to prevent incorrect name-only matches.
 
         Args:
-            fund_name: Zerodha fund name (e.g. "PARAG PARIKH FLEXI CAP FUND - DIRECT PLAN")
-            isin: ISIN code from Zerodha holdings (optional but preferred)
+            fund_name: Zerodha fund name (e.g. "PARAG PARIKH FLEXI CAP FUND - DIRECT PLAN").
+            isin: ISIN code from Zerodha holdings (optional but preferred).
 
         Returns:
-            str or None: AMFI scheme code, or None if no valid match found
+            AMFI scheme code, or None if no valid match found.
         """
         # --- Strategy 1: ISIN-based exact match (primary) ---
         if isin:
@@ -131,10 +147,12 @@ class DataEngine:
                     # identifier, and a plan/option mismatch means the fund
                     # identity is ambiguous. Returning None is safer than
                     # matching a different fund by similar name.
-                    print(
-                        f"  [yellow]Warning[/yellow]: ISIN {isin} matched scheme "
-                        f"{scheme_meta['code']} but plan/option validation failed "
-                        f"for '{fund_name}'. Skipping ISIN match."
+                    logger.warning(
+                        "ISIN %s matched scheme %s but plan/option validation "
+                        "failed for '%s'. Skipping ISIN match.",
+                        isin,
+                        scheme_meta["code"],
+                        fund_name,
                     )
                     return None
             # ISIN not found in AMFI map — fall through to name matching
@@ -146,7 +164,7 @@ class DataEngine:
         query = fund_name.lower().replace("-", " ").replace("  ", " ").strip()
         query_tokens = set(query.split())
 
-        best_match_code = None
+        best_match_code: str | None = None
         best_match_score = 0
 
         for code, name in self.scheme_codes.items():
@@ -176,7 +194,11 @@ class DataEngine:
             # so plan/option info comes from the ISIN map if available.
             scheme_meta = self.isin_to_code.get(
                 next(
-                    (isin for isin, meta in self.isin_to_code.items() if meta["code"] == best_match_code),
+                    (
+                        isin
+                        for isin, meta in self.isin_to_code.items()
+                        if meta["code"] == best_match_code
+                    ),
                     None,
                 ),
                 {"code": best_match_code, "plan": "", "option": ""},
@@ -187,64 +209,38 @@ class DataEngine:
 
         return None
 
-    def get_historical_nav(self, scheme_code, years=3):
-        """Fetch historical NAV for a given scheme code."""
-        # Note: mftool variable naming is a bit non-standard, but this works
-        data = self.mftool.get_scheme_historical_nav(scheme_code)
-        
-        if not data or 'data' not in data:
-            raise ValueError(f"Could not fetch data for scheme {scheme_code}")
+    def get_historical_nav(self, scheme_code: str, years: int = 3) -> pd.Series:
+        """Fetch historical NAV for a given scheme code.
 
-        df = pd.DataFrame(data['data'])
-        df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
-        df['nav'] = pd.to_numeric(df['nav'])
-        df = df.set_index('date').sort_index()
-        
-        # Filter for the requested period
-        start_date = datetime.now() - timedelta(days=years*365)
-        df = df[df.index >= start_date]
-        
-        return df['nav']
+        Args:
+            scheme_code: AMFI scheme code.
+            years: Number of years of history to fetch (default 3).
 
-    def get_portfolio_holdings(self):
-        """Fetch current mutual fund holdings from Zerodha."""
+        Returns:
+            A :class:`pandas.Series` with dates as index and NAV values.
+        """
+        return get_historical_nav(self.mftool, scheme_code, years=years)
+
+    def get_portfolio_holdings(self) -> pd.DataFrame:
+        """Fetch current mutual fund holdings from Zerodha.
+
+        Returns:
+            A :class:`pandas.DataFrame` with holdings data, or empty
+            DataFrame if Kite Connect is not initialized or on error.
+        """
         if not self.kite:
-            raise ValueError("Kite Connect not initialized")
-        
-        # Correctly fetch MF holdings
-        try:
-            holdings = self.kite.mf_holdings()
-        except Exception as e:
-            # Fallback or error handling
-            print(f"Error fetching MF holdings: {e}")
+            logger.error("Kite Connect not initialized")
             return pd.DataFrame()
 
-        mf_holdings = []
-        for h in holdings:
-            # Structure: 
-            # {'tradingsymbol': 'INF...', 'fund': 'Name', 'quantity': ...}
-            # We use 'tradingsymbol' (which is ISIN/Code) as the identifier
-            mf_holdings.append({
-                'tradingsymbol': h.get('fund', h['tradingsymbol']), # Use readable name if available
-                'isin': h['tradingsymbol'], # In MF response, tradingsymbol is often the ISIN
-                'quantity': h['quantity'],
-                'last_price': h['last_price'],
-                'average_price': h['average_price'],
-                'value': h['quantity'] * h['last_price']
-            })
-        
-        return pd.DataFrame(mf_holdings)
+        return get_portfolio_holdings(self.kite)
 
-    def get_scheme_details(self, scheme_code):
+    def get_scheme_details(self, scheme_code: str):
+        """Fetch scheme details from mftool.
+
+        Args:
+            scheme_code: AMFI scheme code.
+
+        Returns:
+            Scheme details dict from mftool.
+        """
         return self.mftool.get_scheme_details(scheme_code)
-
-if __name__ == "__main__":
-    # Test stub
-    de = DataEngine()
-    # Example: Mirae Asset Large Cap Fund (Direct Growth) - Code 118825 (Check codes on AMFI)
-    # This is just a test to see if mftool works
-    try:
-        nav = de.get_historical_nav('118825', years=1)
-        print(f"Fetched {len(nav)} IDCW records for 118825")
-    except Exception as e:
-        print(f"Error: {e}")

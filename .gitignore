@@ -34,6 +34,10 @@ mf_balancer/data/*
 !mf_balancer/data/.gitkeep
 mf_balancer/output/*
 !mf_balancer/output/.gitkeep
+data/*
+data/.gitkeep
+output/*
+output/.gitkeep
 
 # IDEs
 .vscode/

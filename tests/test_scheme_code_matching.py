@@ -17,14 +17,15 @@ These tests verify:
 4. Funds from the original bug report now resolve correctly
 """
 
-import sys
 import os
+import sys
 
-# Add workspace to path so we can import mf_balancer
+# Add workspace to path so we can import src
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from unittest.mock import patch, MagicMock
-from mf_balancer.src.data_engine import DataEngine
+from unittest.mock import MagicMock
+
+from src.data.engine import DataEngine
 
 
 class TestSchemeCodeMatching:
@@ -191,7 +192,7 @@ if __name__ == "__main__":
             except AssertionError as e:
                 print(f"FAIL: {name}: {e}")
                 failed += 1
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - Test runner catches all errors for reporting
                 print(f"ERROR: {name}: {e}")
                 failed += 1
     print(f"\n{passed} passed, {failed} failed out of {passed + failed} tests")

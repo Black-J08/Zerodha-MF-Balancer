@@ -1,0 +1,40 @@
+[project]
+name = "mf-balancer"
+version = "0.1.0"
+description = "Mutual Fund Portfolio Optimization and Rebalancing Tool"
+requires-python = ">=3.13"
+dependencies = [
+    "kiteconnect",
+    "mftool",
+    "PyPortfolioOpt",
+    "pandas",
+    "numpy",
+    "typer",
+    "rich",
+    "python-dotenv",
+    "scikit-learn",
+]
+
+[project.scripts]
+mf-balancer = "src.cli.main:app"
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = "."
+module-name = "src"
+
+[tool.uv]
+default-groups = ["dev"]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "mypy",
+    "ruff",
+]
+
+[tool.mypy]
+disable_error_code = "import-untyped"

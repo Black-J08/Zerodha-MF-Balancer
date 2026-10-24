@@ -24,7 +24,7 @@
 - [x] **Fuzzy Name Matching**: Intelligently maps varying fund names between Zerodha and AMFI.
 - [x] **Data Gap Handling**: Automatically detecting and excluding funds with insufficient history (<30 days) to prevent optimization crashes.
 - [x] **Dynamic Intersection**: Finds the common historical period for all selected funds to ensure accurate covariance calculation.
-- [x] **Data Export**: Saves all intermediate data (`nav_history.csv`, `covariance_matrix.csv`, `expected_returns.csv`) for user inspection.
+- [x] **Data Export**: Saves all intermediate data (`nav_history.csv`, `covariance_matrix.csv`, `expected_returns.csv`) to `data/` for user inspection.
 
 ## 🚀 Future Roadmap
 

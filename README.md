@@ -12,7 +12,7 @@ A Python-based tool to automate the rebalancing of your Mutual Fund portfolio us
     -   Automatically fuzzy-matches your Zerodha funds to AMFI Scheme Codes.
     -   Retrieves historical NAV data for precise calculations.
     -   **Auto-Recovery**: Intelligently handles funds with short or missing history to ensure optimization never crashes.
-    -   **Data Transparency**: Exports all intermediate data (NAV history, Covariance Matrix, Expected Returns) to `mf_balancer/data/` for inspection.
+    -   **Data Transparency**: Exports all intermediate data (NAV history, Covariance Matrix, Expected Returns) to `data/` for inspection.
 -   **Interactive Source Selection**: Automatically lists your debt funds and lets you pick the "Master Source" for capital deployment.
 -   **Flexible Execution**:
     -   **Static Monthly STP**: Generates a set-and-forget monthly transfer plan.
@@ -27,11 +27,11 @@ A Python-based tool to automate the rebalancing of your Mutual Fund portfolio us
 -   A Zerodha Kite Connect API account (API Key & Secret).
 
 ### 2. Installation
-Clone the repository and run the setup script:
+Clone the repository and install dependencies:
 ```bash
 git clone https://github.com/yourusername/mf-balancer.git
 cd mf-balancer
-./setup.sh
+uv sync
 ```
 
 ### 3. Configuration
@@ -45,7 +45,7 @@ KITE_API_SECRET=your_api_secret_here
 
 Run the main script:
 ```bash
-./run.sh
+uv run python -m src.cli.main
 ```
 
 ### What happens next?
@@ -53,7 +53,7 @@ Run the main script:
 2.  **Portfolio Fetch**: It downloads your current mutual fund holdings.
 3.  **Source Selection**: You will see a table of your funds. Enter the ID of the **Debt Fund** you want to use as the source of money.
 4.  **Optimization**: The script fetches historical data, calculates the optimal equity split, and determines the exact transfer amounts.
-5.  **Report**: A detailed Markdown report is saved to `mf_balancer/output/report_YYYY-MM-DD_....md`.
+5.  **Report**: A detailed Markdown report is saved to `output/report_YYYY-MM-DD_....md`.
     -   Includes a **Portfolio Health Check** comparing your current stats vs. the optimized portfolio (Sharpe, Sortino, Drawdown).
     -   Provides a clear **Monthly STP Plan**.
 
