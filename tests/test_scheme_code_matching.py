@@ -192,8 +192,5 @@ if __name__ == "__main__":
             except AssertionError as e:
                 print(f"FAIL: {name}: {e}")
                 failed += 1
-            except Exception as e:  # noqa: BLE001 - Test runner catches all errors for reporting
-                print(f"ERROR: {name}: {e}")
-                failed += 1
     print(f"\n{passed} passed, {failed} failed out of {passed + failed} tests")
     sys.exit(1 if failed else 0)

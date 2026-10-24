@@ -81,8 +81,8 @@ class DataEngine:
                             "plan": plan,
                             "option": option,
                         }
-        except Exception:  # noqa: BLE001 - Network failures must be caught and logged
-            logger.warning("Could not build ISIN map from AMFI")
+        except Exception:
+            logger.exception("Could not build ISIN map from AMFI")
 
         return isin_map
 

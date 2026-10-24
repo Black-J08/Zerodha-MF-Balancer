@@ -39,7 +39,8 @@ def authenticate(config: Config) -> KiteConnect:
         with console.status("[bold green]Verifying Zerodha Session..."):
             kite.profile()
         return kite
-    except Exception:  # noqa: BLE001 - Auth flow must catch all session errors
+    except Exception:
+        logger.exception("Session verification failed")
         console.print("[yellow]Session expired or invalid. Initiating Login Flow...[/yellow]")
         print(f"\n1. Open this URL in your browser:\n{kite.login_url()}")
         print("\n2. After login, you will be redirected to a URL (e.g., https://127.0.0.1/?request_token=...)\n")
@@ -55,6 +56,7 @@ def authenticate(config: Config) -> KiteConnect:
                 f.write(f"\nKITE_ACCESS_TOKEN={access_token}\n")
             console.print("[green]New Access Token saved.[/green]")
             return kite
-        except Exception as e:  # noqa: BLE001 - Login failure must be caught and reported
+        except Exception as e:
+            logger.exception("Login failed")
             console.print(f"[bold red]Login Failed: {e}[/bold red]")
             raise typer.Exit(code=1)

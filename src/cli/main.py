@@ -109,7 +109,8 @@ def advise(
 
                     nav_data[fund_name] = nav_series
                     console.print(f"  [green]Found[/green] {len(nav_series)} records (Code: {code})")
-                except Exception as e:  # noqa: BLE001 - Per-fund NAV fetch failures are logged and skipped
+                except Exception as e:
+                    logger.exception("NAV fetch failed for %s", fund_name)
                     console.print(f"  [red]Failed to fetch NAV[/red]: {e}")
             else:
                 console.print(
@@ -212,7 +213,8 @@ def advise(
                 risk_free_rate=risk_factor,
                 weight_bounds=current_weight_bounds,
             )
-        except Exception:  # noqa: BLE001 - CLI entry point catches all optimization failures
+        except Exception:
+            logger.exception("Optimization failed")
             console.print("[bold red]Optimization failed due to constraints.[/bold red]")
             console.print(
                 "Try relaxing the constraints (e.g., reduce Min Weight or increase Max Weight)."

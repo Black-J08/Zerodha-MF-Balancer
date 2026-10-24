@@ -7,6 +7,10 @@ and normalize them into a standard DataFrame format.
 import pandas as pd
 from kiteconnect import KiteConnect
 
+from src.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 
 def get_portfolio_holdings(kite: KiteConnect) -> pd.DataFrame:
     """Fetch current mutual fund holdings from Zerodha.
@@ -23,7 +27,8 @@ def get_portfolio_holdings(kite: KiteConnect) -> pd.DataFrame:
     """
     try:
         holdings = kite.mf_holdings()
-    except Exception:  # noqa: BLE001 - API failures must return empty DataFrame
+    except Exception:
+        logger.exception("Failed to fetch portfolio holdings")
         return pd.DataFrame()
 
     mf_holdings = []

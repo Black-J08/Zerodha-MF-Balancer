@@ -45,7 +45,7 @@ KITE_API_SECRET=your_api_secret_here
 
 Run the main script:
 ```bash
-uv run python -m src.cli.main
+mf-balancer
 ```
 
 ### What happens next?
