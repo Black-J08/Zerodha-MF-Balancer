@@ -68,6 +68,8 @@ def advise(
             console.print("[red]No Mutual Fund holdings found in this Zerodha account![/red]")
             raise typer.Exit()
         current_holdings = dict(zip(holdings_df['tradingsymbol'], holdings_df['value']))
+        # Build fund name → ISIN mapping for scheme code resolution
+        fund_isin_map = dict(zip(holdings_df['tradingsymbol'], holdings_df['isin']))
 
     # --- 3. Select Source Debt Fund ---
     source_fund_name = None
@@ -103,8 +105,9 @@ def advise(
     nav_data = pd.DataFrame()
     with console.status("[bold green]Fetching Historical NAVs for Equity Funds..."):
         for fund_name in equity_holdings.keys():
+            isin = fund_isin_map.get(fund_name)
             console.print(f"Resolving Scheme Code for: [cyan]{fund_name}[/cyan]...")
-            code = de.get_scheme_code_for_fund(fund_name)
+            code = de.get_scheme_code_for_fund(fund_name, isin=isin)
             
             if code:
                 try:
