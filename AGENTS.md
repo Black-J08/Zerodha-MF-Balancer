@@ -1,0 +1,140 @@
+# MF Balancer — Agent Instructions
+
+## Project Overview
+**MF Balancer** is a Python-based mutual fund portfolio optimization and rebalancing tool.
+
+**Core Goal:** Load mutual fund NAV history, compute expected returns and covariance, and generate optimal portfolio allocations that balance risk and return.
+
+**Design Philosophy:**
+- Load NAV history and compute expected returns, covariance, and correlation matrices
+- Optimize portfolio weights using mean-variance optimization
+- Generate allocation reports and rebalancing recommendations
+- Keep the underlying architecture robust and fast enough for large portfolios
+- Always research and follow industry-standard practices where applicable, but adopt them only when they are relevant and beneficial to the current project’s requirements and architecture.
+
+## Pillars of Implementation
+Every solution you propose or implement must be vetted through the search tools to ensure it meets the following four pillars:
+
+* **Robustness:** Strong error handling, type safety, input validation, and self-healing capabilities.
+* **Redundancy:** High availability, failover mechanisms, no single points of failure (SPOFs), and data replication.
+* **Scalability:** Horizontal scaling capabilities, stateless design patterns, and efficient resource utilization.
+* **High Performance:** Optimized data structures, caching strategies, low-latency communication protocols, and minimized I/O bottlenecks.
+* **Modularity & DRY:** Avoid duplicate code and functionality; abstract shared behavior where appropriate, enforce clear separation of responsibilities between modules and submodules, and structure components for independent development, testing, and future scalability.
+
+## Search Workflow
+1. **Query Formulation:** Use specific queries combining your target technology with keywords like `"production ready"`, `"error handling best practices"`, `"scalability best practices"`, `"performance optimization"`, `"caching strategy"` or `"industry standard"`.
+2. **Tool Execution:** Call relevant MCP tool or available skills.
+3. **Synthesis:** Incorporate the discovered patterns directly into your response or code generation.
+4. **Citation:** Briefly note which standard or documentation source informed your design choice.
+
+## Logging & Error Tracking Standards
+
+Use the standard library [`logging`](https://docs.python.org/3/library/logging.html) module via the `core.logging` facade.
+
+### Severity Levels
+Use the standard levels.
+
+| Level | When to use |
+|---|---|
+| **DEBUG (10)** | Diagnostic information for developers. |
+| **INFO (20)** | Standard operational events and positive confirmations of completed work. |
+| **WARNING (30)** | Non-critical issues or potential anomalies. |
+| **ERROR (40)** | Errors that prevent an operation from completing with exc_info=True always. |
+| **CRITICAL (50)** | System-breaking failures requiring immediate attention. |
+
+## Debug Logging
+Add debug logs at appropriate locations after each major or sub-major task to aid troubleshooting and observability.
+
+### Format
+* Use lazy `%`-formatting: `logger.info("foo %s", x)` — never f-strings at the call site.
+* Pass values as arguments, not pre-formatted strings, so the formatting cost is only paid when the record is actually emitted.
+
+### Exception Handling Rules
+* **Never swallow exceptions silently.**
+* When catching exceptions, **always** use `logger.exception(..., exc_info=True)` (or `logger.error(..., exc_info=True)`). This guarantees the full stack trace, error context, and line numbers are captured.
+
+## Think Before Coding
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+
+Before implementing:
+* State your assumptions explicitly. If uncertain, use the questions tool to ASK.
+* If multiple interpretations exist, present them - don't pick silently, ASK.
+* If a simpler approach exists, say so. Push back when warranted.
+* If something is unclear, stop. Name what's confusing. ASK.
+
+## Object-Oriented Design
+
+* Follow core OOP principles consistently in Python: **encapsulation, abstraction, composition, polymorphism, and single responsibility**.
+* Model real-world/domain entities as cohesive classes that encapsulate both their state and the behavior operating on that state.
+* Prefer **composition and dependency injection** over inheritance when establishing relationships between components.
+* Keep classes focused, modular, reusable, and independently testable; avoid god classes and unnecessary coupling.
+* Use `Protocol` only to define genuine behavioral contracts or replaceable dependencies—not merely because two classes interact.
+* Expose behavior through well-defined public interfaces and keep implementation details private.
+* Before introducing an abstraction, verify that it represents a real domain responsibility or architectural boundary; avoid speculative abstractions.
+
+## Simplicity First
+**Minimum code that solves the problem. Nothing speculative.**
+
+* No features beyond what was asked.
+* No abstractions for single-use code.
+* No "flexibility" or "configurability" that wasn't requested.
+* No error handling for impossible scenarios.
+* Avoid backwards compatibility unless explicitly requested.
+* If you write 200 lines and it could be 50, rewrite it.
+
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+## Surgical Changes
+**Touch only what you must. Clean up only your own mess.**
+
+When editing existing code:
+* Don't "improve" adjacent code, comments, or formatting.
+* Don't refactor things that aren't broken.
+* Match existing style, even if you'd do it differently.
+* If you notice unrelated dead code, mention it - don't delete it.
+
+When your changes create orphans:
+* Remove imports/variables/functions that YOUR changes made unused.
+* Don't remove pre-existing dead code unless asked.
+
+The test: Every changed line should trace directly to the user's request.
+
+## File Reading and Editing
+Use dedicated file/edit/refactor tools whenever available; don't edit via shell commands unless the user explicitly requests terminal editing or no suitable tool exists. Never overwrite a whole file when a surgical edit works. **Always use correct line numbers when reading or writing to a file.** Use `multi_replace_string_in_file` for multiple independent edits across files. After editing: re-read relevant sections as needed, verify imports/references, check formatting, check for accidental changes. Avoid unnecessary temp files; remove any before finishing.
+
+## Dependency Architecture
+
+* Eliminate circular dependencies through proper architecture; never use workarounds such as typing.TYPE_CHECKING, deferred imports, local imports, or lazy imports solely to break circular imports.
+* **Never lazy import modules** — import at module top level.
+* Prefer architectural separation, dependency inversion, shared core modules, and protocols/interfaces where appropriate.
+
+## Type Hinting
+
+* **Never** use string-based forward references.
+* Never use `from __future__ import annotations` solely to work around circular dependencies.
+* Structure modules so annotations resolve naturally without deferred evaluation.
+* Use `typing.Self` where appropriate for class methods.
+
+## Type Checking
+
+* **Always** run `uv run mypy` on the project codebase and fix all errors before completing any task.
+* **Always** run `uv run ruff` alongside mypy when testing newly written code.
+
+## Testing
+
+* **Always** create new tests in the `tests/` folder when creating new or updating features.
+* Every bug fix MUST include a regression test that reproduces the original defect (fails before the fix) and passes after the fix.
+* Prefer unit tests for pure logic; use integration tests with mocked external systems where boundaries matter.
+* Run tests with `uv run pytest tests/`.
+
+## Naming, Module Organization & Responsibility
+
+Adhere to widely accepted software engineering principles (e.g. SOLID, Clean Architecture, Domain-Driven Design where appropriate, and the Python packaging recommendations from the Python ecosystem). Organize code so that each file, class, and function has a single, well-defined responsibility.
+
+* **Always** create sub-folders when required for new modules or packages — never place files directly in a parent directory if a sub-folder structure is appropriate.
+
+## Python Packaging (uv + pyproject.toml)
+
+**Use `uv` for everything: dependency resolution, virtual environments, and building.** Never use `python`, `python3`, `pip`, or manually activate venvs. Run scripts with `uv run python <script.py>` and tests with `uv run pytest tests/`. Set up or refresh the environment with `uv sync`. Dependencies live in `pyproject.toml`; versions are pinned in `uv.lock`.
+
+**Build backend:** every package uses `uv_build` (`build-backend = "uv_build"`). Do not introduce `setuptools`, `hatchling`, or any other backend.
