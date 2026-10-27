@@ -1,0 +1,22 @@
+- auto detect request_token 
+- add redirect url in .env
+- give multiple option on how to optimise portfolio ()
+- use the common time period between funds or a minimum period by default to exclude newly added funds
+- target investment duration
+- transfer duration
+- exit load support
+- monte carlo simulation
+- multiple statistical validations
+- complete removal of CLI and update to a frontend for visual overhaul and graph plotting
+- improve output (ideal target allocation, from master fund[STPs], or SIPs, etc)
+- tax, costing and slippage calculation if possible
+- assets overlapping into consideration and eliminate similar funds if possible
+- investment risk tolerance (how much risk can the investor take)
+- PDF report with comparison and plots rather than MD file
+- option to include more mutual funds into consideration rather than the current portfolio only
+- option to recommend new mutual funds as per the current portfolio to improve results or diversify risk yet not recommending similar funds
+- add pytests, pyproject.toml and other python/open-source standard for maintainability
+- update the project structure for scalability by seperating responsibilities and concern
+- output folder where all results and logs are stored 
+- focus on should it be run, whether as a script, cli invocation or docker container and access through frontend only exposed on a local network
+- use logging instead of print
