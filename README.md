@@ -35,25 +35,49 @@ uv sync
 ```
 
 ### 3. Configuration
-Create a `.env` file in the root directory with your Zerodha credentials:
+Copy `.env.example` to `.env` and fill in your Zerodha credentials:
+
+```bash
+cp .env.example .env
+```
+
+Then edit `.env` with your API key and secret:
 ```env
 KITE_API_KEY=your_api_key_here
 KITE_API_SECRET=your_api_secret_here
 ```
 
+The `.env` file can be placed in either:
+- **The current directory** where you run `mf-balancer` (takes precedence), or
+- **The project root directory** (fallback if not found in CWD).
+
+Alternatively, you can export `KITE_API_KEY` and `KITE_API_SECRET` as environment variables instead of using a `.env` file. If both are already set in the environment, `.env` loading is skipped entirely.
+
+To run from a directory other than the project root, set `MF_BALANCER_HOME` to the project root path:
+
+```bash
+export MF_BALANCER_HOME=/path/to/mf-balancer
+mf-balancer
+```
+
 ## 🖥️ Usage
 
-Run the main script:
+Run the main script from any directory:
 ```bash
 mf-balancer
 ```
+
+### Where files are created
+-   **`.env`**: Loaded from the current directory first, then from the project root. If no `.env` is found and credentials are not in the environment, the tool will raise an error.
+-   **`data/`**: Created under the directory where `.env` was loaded from (current directory or project root). Never created inside a virtual environment or site-packages.
+-   **`output/`**: Always created in the **current directory** where you run the command. Reports are saved to `output/report_YYYY-MM-DD_....md`.
 
 ### What happens next?
 1.  **Login**: If your session is expired, it will guide you to log in via your browser.
 2.  **Portfolio Fetch**: It downloads your current mutual fund holdings.
 3.  **Source Selection**: You will see a table of your funds. Enter the ID of the **Debt Fund** you want to use as the source of money.
 4.  **Optimization**: The script fetches historical data, calculates the optimal equity split, and determines the exact transfer amounts.
-5.  **Report**: A detailed Markdown report is saved to `output/report_YYYY-MM-DD_....md`.
+5.  **Report**: A detailed Markdown report is saved to `output/report_YYYY-MM-DD_....md` in the current directory.
     -   Includes a **Portfolio Health Check** comparing your current stats vs. the optimized portfolio (Sharpe, Sortino, Drawdown).
     -   Provides a clear **Monthly STP Plan**.
 

@@ -24,12 +24,12 @@ def sample_nav_data():
 
 
 @pytest.fixture
-def config():
-    """Create a test Config."""
+def config(tmp_path):
+    """Create a test Config with tmp_path-based absolute paths."""
     return Config(
-        data_dir="data",
-        output_dir="output",
-        reports_dir="output/reports",
+        data_dir=str(tmp_path / "data"),
+        output_dir=str(tmp_path / "output"),
+        reports_dir=str(tmp_path / "output" / "reports"),
         kite_api_key="test_key",
         kite_api_secret="test_secret",
         kite_access_token="test_token",

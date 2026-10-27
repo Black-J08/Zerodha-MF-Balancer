@@ -6,8 +6,112 @@ hardcoded strings are eliminated from the rest of the codebase.
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 
 from dotenv import load_dotenv
+
+
+def _resolve_project_root() -> Path | None:
+    """Resolve the project root directory.
+
+    Priority:
+    1. MF_BALANCER_HOME environment variable
+    2. Derived from __file__ (src/core/config.py -> parents[2])
+    3. Upward search from CWD for .env or pyproject.toml
+    4. Fallback to CWD
+
+    Returns:
+        The resolved project root path, or None if it cannot be determined.
+    """
+    # 1. Explicit override via environment variable
+    override = os.getenv("MF_BALANCER_HOME")
+    if override:
+        return Path(override).resolve()
+
+    # 2. Derived from source file location (editable/dev installs)
+    source_root = Path(__file__).resolve().parents[2]
+    if (source_root / ".env").exists() or (source_root / "pyproject.toml").exists():
+        return source_root
+
+    # 3. Upward search from CWD for .env or pyproject.toml
+    cwd = Path.cwd()
+    for parent in [cwd, *cwd.parents]:
+        if (parent / ".env").exists() or (parent / "pyproject.toml").exists():
+            return parent
+
+    # 4. Fallback to CWD
+    return cwd
+
+
+PROJECT_ROOT = _resolve_project_root()
+
+
+def _is_inside_site_packages_or_venv(path: Path) -> bool:
+    """Check if a path is inside a site-packages directory or virtual environment.
+
+    Args:
+        path: The path to check.
+
+    Returns:
+        True if the path is inside site-packages or a venv, False otherwise.
+    """
+    resolved = path.resolve()
+    for parent in [resolved, *resolved.parents]:
+        if parent.name == "site-packages":
+            return True
+        if (parent / "pyvenv.cfg").exists():
+            return True
+    return False
+
+
+def _resolve_env_path() -> Path | None:
+    """Resolve the .env file path based on loading priority.
+
+    Priority:
+    1. .env in CWD (where mf-balancer is run)
+    2. Skip if KITE_API_KEY and KITE_API_SECRET already in os.environ
+    3. .env in project root
+    4. None (no .env found)
+
+    Returns:
+        Path to the .env file to load, or None if no .env should be loaded.
+    """
+    # Priority 1: .env in CWD
+    cwd_env = Path.cwd() / ".env"
+    if cwd_env.exists():
+        return cwd_env
+
+    # Priority 2: Skip if credentials already in environment
+    if os.getenv("KITE_API_KEY") and os.getenv("KITE_API_SECRET"):
+        return None
+
+    # Priority 3: .env in project root
+    if PROJECT_ROOT is not None:
+        project_root_env = PROJECT_ROOT / ".env"
+        if project_root_env.exists():
+            return project_root_env
+
+    # Priority 4: No .env found
+    return None
+
+
+def _resolve_data_dir(env_dir: Path | None) -> Path:
+    """Resolve the data directory, ensuring it never lands inside site-packages or venv.
+
+    Args:
+        env_dir: The directory where .env was loaded from, or None.
+
+    Returns:
+        A safe absolute path for the data directory.
+    """
+    if env_dir is None:
+        return Path.cwd() / "output" / "data"
+
+    candidate = env_dir / "data"
+    if _is_inside_site_packages_or_venv(candidate):
+        return Path.cwd() / "output" / "data"
+
+    return candidate
 
 
 @dataclass(frozen=True)
@@ -31,21 +135,31 @@ class Config:
     kite_api_secret: str | None
     kite_access_token: str | None
     risk_free_rate: float = 0.07
+    env_loaded: bool = False
+    env_path: str | None = None
 
     @classmethod
     def from_env(cls) -> "Config":
         """Load configuration from environment variables and defaults.
 
-        Loads ``.env`` via :func:`python-dotenv.load_dotenv`, then reads
-        ``KITE_API_KEY``, ``KITE_API_SECRET``, and ``KITE_ACCESS_TOKEN``.
+        Follows .env loading priority:
+        1. .env in CWD (where mf-balancer is run)
+        2. Skip if KITE_API_KEY and KITE_API_SECRET already in os.environ
+        3. .env in project root
+        4. Raise ValueError if required vars still missing
 
         Returns:
             A populated :class:`Config` instance.
 
         Raises:
-            ValueError: If required API credentials are missing.
+            ValueError: If required API credentials are missing after all attempts.
         """
-        load_dotenv()
+        env_path = _resolve_env_path()
+        env_loaded = False
+
+        if env_path is not None:
+            load_dotenv(env_path)
+            env_loaded = True
 
         api_key = os.getenv("KITE_API_KEY")
         api_secret = os.getenv("KITE_API_SECRET")
@@ -53,14 +167,19 @@ class Config:
 
         if not api_key or not api_secret:
             raise ValueError(
-                "KITE_API_KEY and KITE_API_SECRET must be set in .env"
+                "KITE_API_KEY and KITE_API_SECRET must be set in .env "
+                "or exported as environment variables"
             )
 
+        data_dir = _resolve_data_dir(Path(env_path).parent if env_path else None)
+
         return cls(
-            data_dir="data",
-            output_dir="output",
-            reports_dir="output/reports",
+            data_dir=str(data_dir),
+            output_dir=str(Path.cwd() / "output"),
+            reports_dir=str(Path.cwd() / "output" / "reports"),
             kite_api_key=api_key,
             kite_api_secret=api_secret,
             kite_access_token=access_token,
+            env_loaded=env_loaded,
+            env_path=str(env_path) if env_path else None,
         )

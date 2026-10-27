@@ -3,6 +3,8 @@
 Handles login, session verification, and token persistence.
 """
 
+from pathlib import Path
+
 import typer
 from kiteconnect import KiteConnect
 from rich.console import Console
@@ -52,7 +54,13 @@ def authenticate(config: Config) -> KiteConnect:
             kite.set_access_token(access_token)
 
             # Persist the new access token to .env
-            with open(".env", "a") as f:
+            # Write to the .env that was loaded (CWD or project root),
+            # otherwise create a new .env in CWD.
+            if config.env_loaded and config.env_path:
+                token_env_path = Path(config.env_path)
+            else:
+                token_env_path = Path.cwd() / ".env"
+            with open(token_env_path, "a") as f:
                 f.write(f"\nKITE_ACCESS_TOKEN={access_token}\n")
             console.print("[green]New Access Token saved.[/green]")
             return kite
