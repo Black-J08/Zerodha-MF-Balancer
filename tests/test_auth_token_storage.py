@@ -174,3 +174,128 @@ class TestAuthTokenStorage:
         assert "KITE_API_KEY=env_key" in env_content
         assert "KITE_API_SECRET=env_secret" in env_content
         assert "KITE_ACCESS_TOKEN=new_access_token" in env_content
+
+    def test_updating_existing_token_does_not_create_duplicate(
+        self, monkeypatch, tmp_path
+    ):
+        """Updating an existing KITE_ACCESS_TOKEN does not append a duplicate line."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".env").write_text(
+            "KITE_API_KEY=env_key\nKITE_API_SECRET=env_secret\nKITE_ACCESS_TOKEN=old_token\n"
+        )
+        monkeypatch.setenv("KITE_API_KEY", "env_key")
+        monkeypatch.setenv("KITE_API_SECRET", "env_secret")
+
+        from src.core.config import Config
+
+        config = Config.from_env()
+        assert config.env_loaded is True
+        assert config.env_path == str(tmp_path / ".env")
+
+        mock_kite = MagicMock()
+        mock_kite.profile.side_effect = Exception("session expired")
+        mock_kite.login_url.return_value = "https://example.com/login"
+        mock_kite.generate_session.return_value = {
+            "access_token": "new_access_token"
+        }
+
+        with patch("src.cli.auth.KiteConnect", return_value=mock_kite), patch(
+            "rich.prompt.Prompt.ask", return_value="request_token_123"
+        ):
+            authenticate(config)
+
+        # Verify exactly one KITE_ACCESS_TOKEN line exists with the new value
+        env_content = (tmp_path / ".env").read_text()
+        token_lines = [
+            line for line in env_content.splitlines() if line.startswith("KITE_ACCESS_TOKEN=")
+        ]
+        assert len(token_lines) == 1, f"Expected 1 token line, got {len(token_lines)}: {token_lines}"
+        assert token_lines[0] == "KITE_ACCESS_TOKEN=new_access_token"
+        assert "KITE_API_KEY=env_key" in env_content
+        assert "KITE_API_SECRET=env_secret" in env_content
+
+    def test_first_time_token_creation_when_key_absent(
+        self, monkeypatch, tmp_path
+    ):
+        """When no KITE_ACCESS_TOKEN exists, a single line is added."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".env").write_text(
+            "KITE_API_KEY=env_key\nKITE_API_SECRET=env_secret\n"
+        )
+        monkeypatch.setenv("KITE_API_KEY", "env_key")
+        monkeypatch.setenv("KITE_API_SECRET", "env_secret")
+
+        from src.core.config import Config
+
+        config = Config.from_env()
+        assert config.env_loaded is True
+        assert config.env_path == str(tmp_path / ".env")
+
+        mock_kite = MagicMock()
+        mock_kite.profile.side_effect = Exception("session expired")
+        mock_kite.login_url.return_value = "https://example.com/login"
+        mock_kite.generate_session.return_value = {
+            "access_token": "new_access_token"
+        }
+
+        with patch("src.cli.auth.KiteConnect", return_value=mock_kite), patch(
+            "rich.prompt.Prompt.ask", return_value="request_token_123"
+        ):
+            authenticate(config)
+
+        # Verify exactly one KITE_ACCESS_TOKEN line exists with the new value
+        env_content = (tmp_path / ".env").read_text()
+        token_lines = [
+            line for line in env_content.splitlines() if line.startswith("KITE_ACCESS_TOKEN=")
+        ]
+        assert len(token_lines) == 1, f"Expected 1 token line, got {len(token_lines)}: {token_lines}"
+        assert token_lines[0] == "KITE_ACCESS_TOKEN=new_access_token"
+
+    def test_preserves_other_env_entries_on_token_update(
+        self, monkeypatch, tmp_path
+    ):
+        """Updating KITE_ACCESS_TOKEN preserves all other .env entries unchanged."""
+        monkeypatch.chdir(tmp_path)
+        original_env = (
+            "# Zerodha Kite Connect API credentials (required)\n"
+            "KITE_API_KEY=env_key\n"
+            "KITE_API_SECRET=env_secret\n"
+            "\n"
+            "# Zerodha Kite Connect access token (optional, auto-populated after login)\n"
+            "KITE_ACCESS_TOKEN=old_token\n"
+        )
+        (tmp_path / ".env").write_text(original_env)
+        monkeypatch.setenv("KITE_API_KEY", "env_key")
+        monkeypatch.setenv("KITE_API_SECRET", "env_secret")
+
+        from src.core.config import Config
+
+        config = Config.from_env()
+        assert config.env_loaded is True
+        assert config.env_path == str(tmp_path / ".env")
+
+        mock_kite = MagicMock()
+        mock_kite.profile.side_effect = Exception("session expired")
+        mock_kite.login_url.return_value = "https://example.com/login"
+        mock_kite.generate_session.return_value = {
+            "access_token": "new_access_token"
+        }
+
+        with patch("src.cli.auth.KiteConnect", return_value=mock_kite), patch(
+            "rich.prompt.Prompt.ask", return_value="request_token_123"
+        ):
+            authenticate(config)
+
+        # Verify token updated and all other entries preserved exactly
+        env_content = (tmp_path / ".env").read_text()
+        expected_env = (
+            "# Zerodha Kite Connect API credentials (required)\n"
+            "KITE_API_KEY=env_key\n"
+            "KITE_API_SECRET=env_secret\n"
+            "\n"
+            "# Zerodha Kite Connect access token (optional, auto-populated after login)\n"
+            "KITE_ACCESS_TOKEN=new_access_token\n"
+        )
+        assert env_content == expected_env, (
+            f"Expected:\n{expected_env!r}\nGot:\n{env_content!r}"
+        )

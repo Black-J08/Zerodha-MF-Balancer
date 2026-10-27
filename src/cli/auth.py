@@ -6,6 +6,7 @@ Handles login, session verification, and token persistence.
 from pathlib import Path
 
 import typer
+from dotenv import set_key
 from kiteconnect import KiteConnect
 from rich.console import Console
 from rich.prompt import Prompt
@@ -60,8 +61,7 @@ def authenticate(config: Config) -> KiteConnect:
                 token_env_path = Path(config.env_path)
             else:
                 token_env_path = Path.cwd() / ".env"
-            with open(token_env_path, "a") as f:
-                f.write(f"\nKITE_ACCESS_TOKEN={access_token}\n")
+            set_key(token_env_path, "KITE_ACCESS_TOKEN", access_token, quote_mode="never")
             console.print("[green]New Access Token saved.[/green]")
             return kite
         except Exception as e:
