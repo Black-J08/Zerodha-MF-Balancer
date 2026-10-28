@@ -1,25 +1,19 @@
 """CLI entry point for MF Balancer.
 
-Typer-based command-line interface that orchestrates the full
-rebalancing workflow: authentication, data fetching, optimization,
-allocation, and reporting.
+Typer-based command-line interface that handles user interaction and
+delegates orchestration to PortfolioService.
 """
 
-import os
-
-import pandas as pd
 import typer
 from rich.console import Console
 from rich.prompt import FloatPrompt, IntPrompt
 from rich.table import Table
 
-from src.allocation import Allocator
 from src.cli.auth import authenticate
-from src.core.config import Config
 from src.core.logging import get_logger
+from src.core.settings import Settings
 from src.data import DataEngine
-from src.optimization import PortfolioOptimizer
-from src.reporting import Reporter
+from src.services import PortfolioService
 
 logger = get_logger(__name__)
 console = Console()
@@ -36,12 +30,12 @@ def advise(
     risk_factor: float = typer.Option(0.07, help="Risk free rate for Sharpe Ratio (decimal)"),
 ) -> None:
     """Run the Mutual Fund Balancer in Advisory Mode."""
-    config = Config.from_env()
+    config = Settings.from_env()
 
     # --- 1. Authentication ---
     authenticate(config)
 
-    # --- 2. Portfolio Fetching ---
+    # --- 2. Portfolio Fetching (for interactive source fund selection) ---
     de = DataEngine(config)
 
     with console.status("[bold green]Fetching Portfolio Holdings..."):
@@ -50,8 +44,6 @@ def advise(
             console.print("[red]No Mutual Fund holdings found in this Zerodha account![/red]")
             raise typer.Exit()
         current_holdings = dict(zip(holdings_df["tradingsymbol"], holdings_df["value"]))
-        # Build fund name → ISIN mapping for scheme code resolution
-        fund_isin_map = dict(zip(holdings_df["tradingsymbol"], holdings_df["isin"]))
 
     # --- 3. Select Source Debt Fund ---
     source_fund_name: str | None = None
@@ -79,98 +71,7 @@ def advise(
             console.print("[red]Invalid selection![/red]")
             raise typer.Exit(code=1)
 
-    # --- 4. Prepare Optimization Data (Exclude Debt Fund) ---
-    equity_holdings = current_holdings.copy()
-    if source_fund_name:
-        del equity_holdings[source_fund_name]
-
-    # --- 5. Fetch Real NAVs ---
-    nav_data = pd.DataFrame()
-    with console.status("[bold green]Fetching Historical NAVs for Equity Funds..."):
-        for fund_name in equity_holdings:
-            isin = fund_isin_map.get(fund_name)
-            console.print(f"Resolving Scheme Code for: [cyan]{fund_name}[/cyan]...")
-            code = de.get_scheme_code_for_fund(fund_name, isin=isin)
-
-            if code:
-                try:
-                    nav_series = de.get_historical_nav(code)
-                    if nav_series.empty:
-                        console.print(
-                            f"  [yellow]Warning[/yellow]: No data returned for {fund_name} (Code: {code}). Skipping."
-                        )
-                        continue
-
-                    if len(nav_series) < 30:
-                        console.print(
-                            f"  [yellow]Warning[/yellow]: insufficient history ({len(nav_series)} days) for {fund_name}. Need >30. Skipping."
-                        )
-                        continue
-
-                    nav_data[fund_name] = nav_series
-                    console.print(f"  [green]Found[/green] {len(nav_series)} records (Code: {code})")
-                except Exception as e:
-                    logger.exception("NAV fetch failed for %s", fund_name)
-                    console.print(f"  [red]Failed to fetch NAV[/red]: {e}")
-            else:
-                console.print(
-                    "  [red]Could not map fund name to AMFI Code automatically.[/red] Skipping."
-                )
-
-    # Remove funds for which we couldn't get NAVs
-    valid_funds = nav_data.columns.tolist()
-    if not valid_funds:
-        console.print(
-            "[bold red]Critical Error:[/bold red] Could not fetch NAV data for ANY equity fund. Cannot optimize."
-        )
-        raise typer.Exit(code=1)
-
-    # Pre-Optimization Data Cleaning
-    current_len = len(nav_data.dropna())
-    if current_len < 30:
-        console.print(
-            f"[yellow]Warning: Common overlapping period is too short ({current_len} days).[/yellow]"
-        )
-        console.print(
-            "[yellow]Attempting to identify and remove funds with short history to save the optimization...[/yellow]"
-        )
-
-        # Calculate start dates
-        start_dates = nav_data.apply(lambda x: x.first_valid_index())
-        max_start = start_dates.max()  # The latest start date causes the cut
-
-        # Identify funds starting at this max date
-        culprits = start_dates[start_dates == max_start].index.tolist()
-        console.print(f"Excluding recent funds causing history truncation: {culprits}")
-
-        nav_data = nav_data.drop(columns=culprits)
-        valid_funds = nav_data.columns.tolist()  # Update valid list
-
-        if nav_data.dropna().empty:
-            console.print(
-                "[bold red]Critical Error:[/bold red] Still no overlapping data after cleaning. Cannot optimize."
-            )
-            raise typer.Exit(code=1)
-        else:
-            console.print(
-                f"[green]Optimization preserved with {len(valid_funds)} funds. Common period: {len(nav_data.dropna())} days.[/green]"
-            )
-
-    # Save Cleaned NAV Data for Inspection
-    nav_export_path = os.path.join(config.data_dir, "nav_history.csv")
-    os.makedirs(os.path.dirname(nav_export_path), exist_ok=True)
-    nav_data.to_csv(nav_export_path)
-    console.print(f"[dim]Saved historical NAV data to {nav_export_path}[/dim]")
-
-    equity_holdings_optimized = {k: v for k, v in equity_holdings.items() if k in valid_funds}
-    skipped_funds = set(equity_holdings.keys()) - set(valid_funds)
-
-    if skipped_funds:
-        console.print(
-            f"\n[yellow]Warning:[/yellow] The following funds are excluded from optimization due to missing data: {skipped_funds}"
-        )
-
-    # --- 6. Optimization Strategy Selection ---
+    # --- 4. Optimization Strategy Selection ---
     console.print("\n[bold cyan]Select Optimization Strategy:[/bold cyan]")
     console.print("1. [bold]Maximum Sharpe Ratio[/bold] (Standard, Unconstrained)")
     console.print("   [dim]- Finds the mathematically optimal portfolio.[/dim]")
@@ -182,7 +83,7 @@ def advise(
 
     strategy_choice = IntPrompt.ask("Enter Choice", choices=["1", "2"], default=1)
 
-    current_weight_bounds: tuple[float, float] = (0.0, 1.0)  # Default: 0% to 100%
+    weight_bounds: tuple[float, float] = (0.0, 1.0)  # Default: 0% to 100%
 
     if strategy_choice == 2:
         console.print("\n[bold]Configure Constraints:[/bold]")
@@ -194,64 +95,69 @@ def advise(
         )
 
         # Validation
-        if min_w * len(valid_funds) > 1.0:
+        valid_funds_count = len(current_holdings) - (1 if source_fund_name else 0)
+        if min_w * valid_funds_count > 1.0:
             console.print(
-                f"[bold red]Error:[/bold red] Minimum weight of {min_w:.0%} for {len(valid_funds)} funds requires {min_w * len(valid_funds):.0%} allocation, which is > 100%."
+                f"[bold red]Error:[/bold red] Minimum weight of {min_w:.0%} for {valid_funds_count} funds requires {min_w * valid_funds_count:.0%} allocation, which is > 100%."
             )
             raise typer.Exit(code=1)
 
-        current_weight_bounds = (min_w, max_w)
+        weight_bounds = (min_w, max_w)
         console.print(f"[green]Applying Constraints: Min {min_w:.0%} | Max {max_w:.0%}[/green]")
 
-    # --- 7. Optimize ---
-    with console.status("[bold blue]Optimizing Portfolio..."):
-        optimizer = PortfolioOptimizer(nav_data, config)
-        optimizer.calculate_metrics()
+    # --- 5. Delegate to PortfolioService ---
+    service = PortfolioService(config)
 
+    with console.status("[bold blue]Running portfolio advisory..."):
         try:
-            optimal_weights = optimizer.optimize_sharpe_ratio(
+            result = service.run_advisory(
+                debt_capital=debt_capital,
+                months=months,
                 risk_free_rate=risk_factor,
-                weight_bounds=current_weight_bounds,
+                source_fund_name=source_fund_name,
+                weight_bounds=weight_bounds,
             )
+        except ValueError as e:
+            console.print(f"[bold red]Error:[/bold red] {e}")
+            raise typer.Exit(code=1)
         except Exception:
-            logger.exception("Optimization failed")
-            console.print("[bold red]Optimization failed due to constraints.[/bold red]")
-            console.print(
-                "Try relaxing the constraints (e.g., reduce Min Weight or increase Max Weight)."
-            )
+            logger.exception("Advisory workflow failed")
+            console.print("[bold red]Advisory workflow failed.[/bold red]")
             raise typer.Exit(code=1)
 
+    # --- 6. Display Results ---
     console.print("\n[bold]Optimal Equity Allocation:[/bold]")
-    for f, w in optimal_weights.items():
+    for f, w in result.optimal_weights.items():
         console.print(f"- {f}: {w * 100:.1f}%")
 
-    # --- 7. Calculate Advanced Metrics ---
-    # A. Optimized Portfolio Stats
-    optimized_stats = optimizer.get_advanced_stats(optimal_weights)
-
-    # B. Current Portfolio Stats (Reconstructed)
-    # We need to normalize current equity holdings to weights summing to 1
-    total_equity_value = sum(equity_holdings_optimized.values())
-    current_weights = {k: v / total_equity_value for k, v in equity_holdings_optimized.items()}
-    current_stats = optimizer.get_advanced_stats(current_weights)
-
     console.print("\n[bold]Portfolio Health Check:[/bold]")
+    current_sharpe = result.current_stats["Sharpe Ratio"] if result.current_stats else 0.0
+    optimized_sharpe = result.optimized_stats["Sharpe Ratio"] if result.optimized_stats else 0.0
     console.print(
-        f"Current Sharpe: {current_stats['Sharpe Ratio']:.2f} | Optimized Sharpe: {optimized_stats['Sharpe Ratio']:.2f}"
+        f"Current Sharpe: {current_sharpe:.2f} | "
+        f"Optimized Sharpe: {optimized_sharpe:.2f}"
     )
 
-    # --- 8. Allocate ---
-    # We distribute the debt capital ONLY to the optimized funds
-    allocator = Allocator(equity_holdings_optimized, debt_capital, optimal_weights, months)
-    transfers = allocator.calculate_transfers()
-    summary = allocator.get_summary()
+    if result.skipped_funds:
+        console.print(
+            f"\n[yellow]Warning:[/yellow] The following funds are excluded from optimization due to missing data: {result.skipped_funds}"
+        )
 
-    # --- 9. Report ---
-    reporter = Reporter(config)
-    report_path = reporter.generate_report(
-        summary, optimal_weights, transfers, duration=months,
-        current_stats=current_stats,
-        optimized_stats=optimized_stats,
+    console.print(f"\n[bold green]Success![/bold green] Report saved to: [link={result.report_path}]{result.report_path}[/link]")
+
+
+@app.command()
+def serve(
+    host: str = typer.Option("127.0.0.1", help="Host to bind the API server to"),
+    port: int = typer.Option(8000, help="Port to bind the API server to"),
+    reload: bool = typer.Option(False, help="Enable auto-reload for development"),
+) -> None:
+    """Start the MF Balancer API server."""
+    import uvicorn
+
+    uvicorn.run(
+        "src.api.main:app",
+        host=host,
+        port=port,
+        reload=reload,
     )
-
-    console.print(f"\n[bold green]Success![/bold green] Report saved to: [link={report_path}]{report_path}[/link]")

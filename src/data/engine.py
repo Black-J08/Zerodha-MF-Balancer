@@ -12,8 +12,8 @@ import requests
 from kiteconnect import KiteConnect
 from mftool import Mftool
 
-from src.core.config import Config
 from src.core.logging import get_logger
+from src.core.settings import Settings
 from src.data.holdings import get_portfolio_holdings
 from src.data.nav import get_historical_nav
 
@@ -29,7 +29,7 @@ class DataEngine:
         config: Application configuration containing API credentials and paths.
     """
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Settings):
         self.config = config
         self.mftool = Mftool()
 

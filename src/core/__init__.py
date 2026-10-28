@@ -3,7 +3,6 @@
 Exports configuration, logging, and domain models.
 """
 
-from src.core.config import Config
 from src.core.logging import get_logger
 from src.core.models import (
     AllocationResult,
@@ -12,13 +11,14 @@ from src.core.models import (
     Portfolio,
     TransferPlan,
 )
+from src.core.settings import Settings
 
 __all__ = [
     "AllocationResult",
-    "Config",
     "Fund",
     "Holding",
     "Portfolio",
+    "Settings",
     "TransferPlan",
     "get_logger",
 ]

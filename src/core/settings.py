@@ -1,14 +1,20 @@
-"""Configuration management for MF Balancer.
+"""Configuration management for MF Balancer using pydantic-settings.
 
-Centralizes paths, settings, and environment variable loading so that
-hardcoded strings are eliminated from the rest of the codebase.
+Centralizes paths, settings, and environment variable loading with type
+validation. Preserves the existing configuration-loading priority:
+
+1. ``.env`` in CWD (where ``mf-balancer`` is run) — takes precedence
+2. Skip ``.env`` loading if ``KITE_API_KEY`` and ``KITE_API_SECRET`` already
+   in ``os.environ``
+3. ``.env`` in project root
+4. Raise :exc:`ValueError` if required vars still missing
 """
 
 import os
-from dataclasses import dataclass
 from pathlib import Path
 
-from dotenv import load_dotenv
+from pydantic import model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 def _resolve_project_root() -> Path | None:
@@ -16,7 +22,7 @@ def _resolve_project_root() -> Path | None:
 
     Priority:
     1. MF_BALANCER_HOME environment variable
-    2. Derived from __file__ (src/core/config.py -> parents[2])
+    2. Derived from __file__ (src/core/settings.py -> parents[2])
     3. Upward search from CWD for .env or pyproject.toml
     4. Fallback to CWD
 
@@ -114,8 +120,7 @@ def _resolve_data_dir(env_dir: Path | None) -> Path:
     return candidate
 
 
-@dataclass(frozen=True)
-class Config:
+class Settings(BaseSettings):
     """Application configuration.
 
     Attributes:
@@ -126,20 +131,49 @@ class Config:
         kite_api_secret: Zerodha Kite Connect API secret.
         kite_access_token: Zerodha Kite Connect access token (optional).
         risk_free_rate: Risk-free rate for Sharpe ratio (default 0.07 = 7%).
+        env_loaded: Whether a .env file was loaded.
+        env_path: Path to the .env file that was loaded, if any.
     """
 
-    data_dir: str
-    output_dir: str
-    reports_dir: str
-    kite_api_key: str | None
-    kite_api_secret: str | None
-    kite_access_token: str | None
+    kite_api_key: str | None = None
+    kite_api_secret: str | None = None
+    kite_access_token: str | None = None
     risk_free_rate: float = 0.07
+    data_dir: str = ""
+    output_dir: str = ""
+    reports_dir: str = ""
     env_loaded: bool = False
     env_path: str | None = None
 
+    model_config = SettingsConfigDict(env_file_encoding="utf-8")
+
+    def __init__(self, **kwargs):
+        env_path = _resolve_env_path()
+        env_loaded = env_path is not None
+
+        kwargs["_env_file"] = env_path
+        kwargs["env_loaded"] = env_loaded
+        kwargs["env_path"] = str(env_path) if env_path else None
+
+        env_dir = Path(env_path).parent if env_path else None
+        kwargs["data_dir"] = str(_resolve_data_dir(env_dir))
+        kwargs["output_dir"] = str(Path.cwd() / "output")
+        kwargs["reports_dir"] = str(Path.cwd() / "output" / "reports")
+
+        super().__init__(**kwargs)
+
+    @model_validator(mode="after")
+    def _check_credentials(self) -> "Settings":
+        """Validate that required API credentials are present."""
+        if not self.kite_api_key or not self.kite_api_secret:
+            raise ValueError(
+                "KITE_API_KEY and KITE_API_SECRET must be set in .env "
+                "or exported as environment variables"
+            )
+        return self
+
     @classmethod
-    def from_env(cls) -> "Config":
+    def from_env(cls) -> "Settings":
         """Load configuration from environment variables and defaults.
 
         Follows .env loading priority:
@@ -149,37 +183,9 @@ class Config:
         4. Raise ValueError if required vars still missing
 
         Returns:
-            A populated :class:`Config` instance.
+            A populated :class:`Settings` instance.
 
         Raises:
             ValueError: If required API credentials are missing after all attempts.
         """
-        env_path = _resolve_env_path()
-        env_loaded = False
-
-        if env_path is not None:
-            load_dotenv(env_path)
-            env_loaded = True
-
-        api_key = os.getenv("KITE_API_KEY")
-        api_secret = os.getenv("KITE_API_SECRET")
-        access_token = os.getenv("KITE_ACCESS_TOKEN")
-
-        if not api_key or not api_secret:
-            raise ValueError(
-                "KITE_API_KEY and KITE_API_SECRET must be set in .env "
-                "or exported as environment variables"
-            )
-
-        data_dir = _resolve_data_dir(Path(env_path).parent if env_path else None)
-
-        return cls(
-            data_dir=str(data_dir),
-            output_dir=str(Path.cwd() / "output"),
-            reports_dir=str(Path.cwd() / "output" / "reports"),
-            kite_api_key=api_key,
-            kite_api_secret=api_secret,
-            kite_access_token=access_token,
-            env_loaded=env_loaded,
-            env_path=str(env_path) if env_path else None,
-        )
+        return cls()

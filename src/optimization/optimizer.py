@@ -9,8 +9,8 @@ import os
 import pandas as pd
 from pypfopt import EfficientFrontier, expected_returns, risk_models
 
-from src.core.config import Config
 from src.core.logging import get_logger
+from src.core.settings import Settings
 from src.optimization.metrics import get_advanced_stats
 
 logger = get_logger(__name__)
@@ -25,7 +25,7 @@ class PortfolioOptimizer:
         config: Application configuration (used for data export paths).
     """
 
-    def __init__(self, nav_data: pd.DataFrame, config: Config):
+    def __init__(self, nav_data: pd.DataFrame, config: Settings):
         self.nav_data = nav_data
         self.config = config
         self.mu: pd.Series | None = None

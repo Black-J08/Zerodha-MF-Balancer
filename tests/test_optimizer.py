@@ -7,7 +7,7 @@ and advanced metrics calculation.
 import pandas as pd
 import pytest
 
-from src.core.config import Config
+from src.core.settings import Settings
 from src.optimization import PortfolioOptimizer
 
 
@@ -24,16 +24,12 @@ def sample_nav_data():
 
 
 @pytest.fixture
-def config(tmp_path):
-    """Create a test Config with tmp_path-based absolute paths."""
-    return Config(
-        data_dir=str(tmp_path / "data"),
-        output_dir=str(tmp_path / "output"),
-        reports_dir=str(tmp_path / "output" / "reports"),
-        kite_api_key="test_key",
-        kite_api_secret="test_secret",
-        kite_access_token="test_token",
-    )
+def config(tmp_path, monkeypatch):
+    """Create a test Settings with tmp_path-based absolute paths."""
+    monkeypatch.setenv("KITE_API_KEY", "test_key")
+    monkeypatch.setenv("KITE_API_SECRET", "test_secret")
+    monkeypatch.chdir(tmp_path)
+    return Settings.from_env()
 
 
 class TestPortfolioOptimizer:

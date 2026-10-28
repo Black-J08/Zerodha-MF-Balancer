@@ -1,4 +1,4 @@
-"""Unit tests for Config class.
+"""Unit tests for Settings class.
 
 Tests .env loading priority, project root resolution, safe data_dir
 resolution, output_dir/reports_dir under CWD, and access token storage
@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from src.core.config import (
-    Config,
+from src.core.settings import (
+    Settings,
     _is_inside_site_packages_or_venv,
     _resolve_data_dir,
     _resolve_env_path,
@@ -38,10 +38,10 @@ class TestResolveProjectRoot:
         """Upward search from CWD finds project root with pyproject.toml."""
         monkeypatch.delenv("MF_BALANCER_HOME", raising=False)
         # Mock __file__ so __file__-based resolution doesn't find the real project root
-        fake_file = tmp_path / "src" / "core" / "config.py"
+        fake_file = tmp_path / "src" / "core" / "settings.py"
         fake_file.parent.mkdir(parents=True)
         fake_file.write_text("")
-        monkeypatch.setattr("src.core.config.__file__", str(fake_file))
+        monkeypatch.setattr("src.core.settings.__file__", str(fake_file))
         # Create a fake project root with pyproject.toml
         fake_root = tmp_path / "fake_project"
         fake_root.mkdir()
@@ -57,10 +57,10 @@ class TestResolveProjectRoot:
         """Falls back to CWD when no markers found anywhere."""
         monkeypatch.delenv("MF_BALANCER_HOME", raising=False)
         # Mock __file__ so __file__-based resolution doesn't find the real project root
-        fake_file = tmp_path / "src" / "core" / "config.py"
+        fake_file = tmp_path / "src" / "core" / "settings.py"
         fake_file.parent.mkdir(parents=True)
         fake_file.write_text("")
-        monkeypatch.setattr("src.core.config.__file__", str(fake_file))
+        monkeypatch.setattr("src.core.settings.__file__", str(fake_file))
         # Ensure no .env or pyproject.toml in tmp_path or its parents
         monkeypatch.chdir(tmp_path)
         result = _resolve_project_root()
@@ -74,7 +74,7 @@ class TestIsInsideSitePackagesOrVenv:
         """Returns True when path is inside site-packages."""
         site_packages = tmp_path / "lib" / "python3.13" / "site-packages"
         site_packages.mkdir(parents=True)
-        target = site_packages / "mf_balancer" / "config.py"
+        target = site_packages / "mf_balancer" / "settings.py"
         assert _is_inside_site_packages_or_venv(target) is True
 
     def test_inside_venv(self, tmp_path):
@@ -88,7 +88,7 @@ class TestIsInsideSitePackagesOrVenv:
 
     def test_not_inside_site_packages_or_venv(self, tmp_path):
         """Returns False for normal project directories."""
-        target = tmp_path / "src" / "core" / "config.py"
+        target = tmp_path / "src" / "core" / "settings.py"
         target.parent.mkdir(parents=True)
         assert _is_inside_site_packages_or_venv(target) is False
 
@@ -127,7 +127,7 @@ class TestResolveEnvPath:
         (project_root / ".env").write_text(
             "KITE_API_KEY=root_key\nKITE_API_SECRET=root_secret\n"
         )
-        monkeypatch.setattr("src.core.config.PROJECT_ROOT", project_root.resolve())
+        monkeypatch.setattr("src.core.settings.PROJECT_ROOT", project_root.resolve())
         result = _resolve_env_path()
         assert result == project_root / ".env"
 
@@ -137,7 +137,7 @@ class TestResolveEnvPath:
         monkeypatch.delenv("KITE_API_SECRET", raising=False)
         monkeypatch.chdir(tmp_path)
         # No .env anywhere
-        monkeypatch.setattr("src.core.config.PROJECT_ROOT", tmp_path)
+        monkeypatch.setattr("src.core.settings.PROJECT_ROOT", tmp_path)
         result = _resolve_env_path()
         assert result is None
 
@@ -178,7 +178,7 @@ class TestResolveDataDir:
 
 
 class TestFromEnvLoadingPriority:
-    """Tests for Config.from_env() .env loading priority."""
+    """Tests for Settings.from_env() .env loading priority."""
 
     def test_loads_dotenv_from_cwd_when_present(self, monkeypatch, tmp_path):
         """Loads .env from CWD when present and vars not in environment."""
@@ -188,7 +188,7 @@ class TestFromEnvLoadingPriority:
         (tmp_path / ".env").write_text(
             "KITE_API_KEY=cwd_key\nKITE_API_SECRET=cwd_secret\n"
         )
-        config = Config.from_env()
+        config = Settings.from_env()
         assert config.kite_api_key == "cwd_key"
         assert config.kite_api_secret == "cwd_secret"
         assert config.env_loaded is True
@@ -200,7 +200,7 @@ class TestFromEnvLoadingPriority:
         # No .env in CWD
         monkeypatch.setenv("KITE_API_KEY", "env_key")
         monkeypatch.setenv("KITE_API_SECRET", "env_secret")
-        config = Config.from_env()
+        config = Settings.from_env()
         assert config.kite_api_key == "env_key"
         assert config.kite_api_secret == "env_secret"
         assert config.env_loaded is False
@@ -219,8 +219,8 @@ class TestFromEnvLoadingPriority:
         (project_root / ".env").write_text(
             "KITE_API_KEY=root_key\nKITE_API_SECRET=root_secret\n"
         )
-        monkeypatch.setattr("src.core.config.PROJECT_ROOT", project_root.resolve())
-        config = Config.from_env()
+        monkeypatch.setattr("src.core.settings.PROJECT_ROOT", project_root.resolve())
+        config = Settings.from_env()
         assert config.kite_api_key == "root_key"
         assert config.kite_api_secret == "root_secret"
         assert config.env_loaded is True
@@ -239,8 +239,8 @@ class TestFromEnvLoadingPriority:
         (project_root / ".env").write_text(
             "KITE_API_KEY=root_key\nKITE_API_SECRET=root_secret\n"
         )
-        monkeypatch.setattr("src.core.config.PROJECT_ROOT", project_root.resolve())
-        config = Config.from_env()
+        monkeypatch.setattr("src.core.settings.PROJECT_ROOT", project_root.resolve())
+        config = Settings.from_env()
         assert config.kite_api_key == "cwd_key"
         assert config.kite_api_secret == "cwd_secret"
         assert config.env_path == str(tmp_path / ".env")
@@ -258,8 +258,8 @@ class TestFromEnvLoadingPriority:
         (project_root / ".env").write_text(
             "KITE_API_KEY=root_key\nKITE_API_SECRET=root_secret\n"
         )
-        monkeypatch.setattr("src.core.config.PROJECT_ROOT", project_root.resolve())
-        config = Config.from_env()
+        monkeypatch.setattr("src.core.settings.PROJECT_ROOT", project_root.resolve())
+        config = Settings.from_env()
         assert config.kite_api_key == "env_key"
         assert config.kite_api_secret == "env_secret"
         assert config.env_loaded is False
@@ -273,9 +273,9 @@ class TestFromEnvLoadingPriority:
         monkeypatch.delenv("KITE_API_SECRET", raising=False)
         monkeypatch.chdir(tmp_path)
         # No .env anywhere
-        monkeypatch.setattr("src.core.config.PROJECT_ROOT", tmp_path)
+        monkeypatch.setattr("src.core.settings.PROJECT_ROOT", tmp_path)
         with pytest.raises(ValueError, match="KITE_API_KEY and KITE_API_SECRET"):
-            Config.from_env()
+            Settings.from_env()
 
     def test_raises_when_dotenv_incomplete(self, monkeypatch, tmp_path):
         """Raises ValueError when .env present but missing one required var."""
@@ -284,11 +284,11 @@ class TestFromEnvLoadingPriority:
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".env").write_text("KITE_API_KEY=only_key\n")
         with pytest.raises(ValueError, match="KITE_API_KEY and KITE_API_SECRET"):
-            Config.from_env()
+            Settings.from_env()
 
 
-class TestConfigDirectoryPaths:
-    """Tests for Config directory path attributes."""
+class TestSettingsDirectoryPaths:
+    """Tests for Settings directory path attributes."""
 
     def test_data_dir_under_cwd_when_env_loaded_from_cwd(
         self, monkeypatch, tmp_path
@@ -300,7 +300,7 @@ class TestConfigDirectoryPaths:
         (tmp_path / ".env").write_text(
             "KITE_API_KEY=cwd_key\nKITE_API_SECRET=cwd_secret\n"
         )
-        config = Config.from_env()
+        config = Settings.from_env()
         assert config.data_dir == str(tmp_path / "data")
         assert Path(config.data_dir).is_absolute()
 
@@ -316,8 +316,8 @@ class TestConfigDirectoryPaths:
         (project_root / ".env").write_text(
             "KITE_API_KEY=root_key\nKITE_API_SECRET=root_secret\n"
         )
-        monkeypatch.setattr("src.core.config.PROJECT_ROOT", project_root.resolve())
-        config = Config.from_env()
+        monkeypatch.setattr("src.core.settings.PROJECT_ROOT", project_root.resolve())
+        config = Settings.from_env()
         assert config.data_dir == str(project_root / "data")
         assert Path(config.data_dir).is_absolute()
 
@@ -326,7 +326,7 @@ class TestConfigDirectoryPaths:
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("KITE_API_KEY", "env_key")
         monkeypatch.setenv("KITE_API_SECRET", "env_secret")
-        config = Config.from_env()
+        config = Settings.from_env()
         assert config.data_dir == str(tmp_path / "output" / "data")
         assert Path(config.data_dir).is_absolute()
 
@@ -335,7 +335,7 @@ class TestConfigDirectoryPaths:
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("KITE_API_KEY", "env_key")
         monkeypatch.setenv("KITE_API_SECRET", "env_secret")
-        config = Config.from_env()
+        config = Settings.from_env()
         assert Path(config.data_dir).is_absolute()
 
     def test_output_dir_is_absolute_under_cwd(self, monkeypatch, tmp_path):
@@ -343,7 +343,7 @@ class TestConfigDirectoryPaths:
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("KITE_API_KEY", "env_key")
         monkeypatch.setenv("KITE_API_SECRET", "env_secret")
-        config = Config.from_env()
+        config = Settings.from_env()
         assert config.output_dir == str(tmp_path / "output")
         assert Path(config.output_dir).is_absolute()
 
@@ -354,13 +354,13 @@ class TestConfigDirectoryPaths:
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("KITE_API_KEY", "env_key")
         monkeypatch.setenv("KITE_API_SECRET", "env_secret")
-        config = Config.from_env()
+        config = Settings.from_env()
         assert config.reports_dir == str(tmp_path / "output" / "reports")
         assert Path(config.reports_dir).is_absolute()
 
 
-class TestConfigEnvTracking:
-    """Tests for Config env_loaded and env_path attributes."""
+class TestSettingsEnvTracking:
+    """Tests for Settings env_loaded and env_path attributes."""
 
     def test_env_loaded_true_when_dotenv_loaded_from_cwd(
         self, monkeypatch, tmp_path
@@ -372,7 +372,7 @@ class TestConfigEnvTracking:
         (tmp_path / ".env").write_text(
             "KITE_API_KEY=cwd_key\nKITE_API_SECRET=cwd_secret\n"
         )
-        config = Config.from_env()
+        config = Settings.from_env()
         assert config.env_loaded is True
         assert config.env_path == str(tmp_path / ".env")
 
@@ -383,7 +383,7 @@ class TestConfigEnvTracking:
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("KITE_API_KEY", "env_key")
         monkeypatch.setenv("KITE_API_SECRET", "env_secret")
-        config = Config.from_env()
+        config = Settings.from_env()
         assert config.env_loaded is False
         assert config.env_path is None
 
@@ -399,7 +399,7 @@ class TestConfigEnvTracking:
         (project_root / ".env").write_text(
             "KITE_API_KEY=root_key\nKITE_API_SECRET=root_secret\n"
         )
-        monkeypatch.setattr("src.core.config.PROJECT_ROOT", project_root.resolve())
-        config = Config.from_env()
+        monkeypatch.setattr("src.core.settings.PROJECT_ROOT", project_root.resolve())
+        config = Settings.from_env()
         assert config.env_loaded is True
         assert config.env_path == str(project_root / ".env")

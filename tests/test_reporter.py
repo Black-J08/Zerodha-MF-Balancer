@@ -4,26 +4,20 @@ Tests Markdown report generation and file output.
 """
 
 import os
-import tempfile
 
 import pytest
 
-from src.core.config import Config
+from src.core.settings import Settings
 from src.reporting import Reporter
 
 
 @pytest.fixture
-def config():
-    """Create a test Config with temp output dir."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        yield Config(
-            data_dir=os.path.join(tmpdir, "data"),
-            output_dir=os.path.join(tmpdir, "output"),
-            reports_dir=os.path.join(tmpdir, "output", "reports"),
-            kite_api_key="test_key",
-            kite_api_secret="test_secret",
-            kite_access_token="test_token",
-        )
+def config(tmp_path, monkeypatch):
+    """Create a test Settings with temp output dir."""
+    monkeypatch.setenv("KITE_API_KEY", "test_key")
+    monkeypatch.setenv("KITE_API_SECRET", "test_secret")
+    monkeypatch.chdir(tmp_path)
+    return Settings.from_env()
 
 
 class TestReporter:

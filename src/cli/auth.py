@@ -11,14 +11,14 @@ from kiteconnect import KiteConnect
 from rich.console import Console
 from rich.prompt import Prompt
 
-from src.core.config import Config
 from src.core.logging import get_logger
+from src.core.settings import Settings
 
 logger = get_logger(__name__)
 console = Console()
 
 
-def authenticate(config: Config) -> KiteConnect:
+def authenticate(config: Settings) -> KiteConnect:
     """Authenticate with Zerodha Kite Connect.
 
     Verifies the existing access token, or initiates the interactive

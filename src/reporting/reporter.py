@@ -9,8 +9,8 @@ from datetime import datetime
 
 from rich.console import Console
 
-from src.core.config import Config
 from src.core.logging import get_logger
+from src.core.settings import Settings
 
 logger = get_logger(__name__)
 
@@ -22,7 +22,7 @@ class Reporter:
         config: Application configuration (used for output directory paths).
     """
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Settings):
         self.config = config
         os.makedirs(self.config.reports_dir, exist_ok=True)
         self.console = Console()

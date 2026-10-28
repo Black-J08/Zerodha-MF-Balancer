@@ -20,3 +20,4 @@
 - output folder where all results and logs are stored 
 - focus on should it be run, whether as a script, cli invocation or docker container and access through frontend only exposed on a local network
 - use logging instead of print
+- ensure correct statistical calculations across the entire project

@@ -5,20 +5,20 @@ Public API surface for the src package.
 
 from src.core import (
     AllocationResult,
-    Config,
     Fund,
     Holding,
     Portfolio,
+    Settings,
     TransferPlan,
     get_logger,
 )
 
 __all__ = [
     "AllocationResult",
-    "Config",
     "Fund",
     "Holding",
     "Portfolio",
+    "Settings",
     "TransferPlan",
     "get_logger",
 ]

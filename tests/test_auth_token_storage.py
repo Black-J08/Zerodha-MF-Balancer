@@ -22,9 +22,9 @@ class TestAuthTokenStorage:
             "KITE_API_KEY=cwd_key\nKITE_API_SECRET=cwd_secret\n"
         )
 
-        from src.core.config import Config
+        from src.core.settings import Settings
 
-        config = Config.from_env()
+        config = Settings.from_env()
         assert config.env_loaded is True
         assert config.env_path == str(tmp_path / ".env")
 
@@ -57,13 +57,13 @@ class TestAuthTokenStorage:
             "KITE_API_KEY=root_key\nKITE_API_SECRET=root_secret\n"
         )
 
-        import src.core.config as config_module
-        from src.core.config import Config
+        import src.core.settings as config_module
+        from src.core.settings import Settings
 
         monkeypatch.setattr(
             config_module, "PROJECT_ROOT", project_root.resolve()
         )
-        config = Config.from_env()
+        config = Settings.from_env()
         assert config.env_loaded is True
         assert config.env_path == str(project_root / ".env")
 
@@ -91,9 +91,9 @@ class TestAuthTokenStorage:
         monkeypatch.setenv("KITE_API_KEY", "env_key")
         monkeypatch.setenv("KITE_API_SECRET", "env_secret")
 
-        from src.core.config import Config
+        from src.core.settings import Settings
 
-        config = Config.from_env()
+        config = Settings.from_env()
         assert config.env_loaded is False
         assert config.env_path is None
 
@@ -120,9 +120,9 @@ class TestAuthTokenStorage:
         monkeypatch.setenv("KITE_API_KEY", "env_key")
         monkeypatch.setenv("KITE_API_SECRET", "env_secret")
 
-        from src.core.config import Config
+        from src.core.settings import Settings
 
-        config = Config.from_env()
+        config = Settings.from_env()
         assert config.env_loaded is False
 
         mock_kite = MagicMock()
@@ -151,9 +151,9 @@ class TestAuthTokenStorage:
         monkeypatch.setenv("KITE_API_KEY", "env_key")
         monkeypatch.setenv("KITE_API_SECRET", "env_secret")
 
-        from src.core.config import Config
+        from src.core.settings import Settings
 
-        config = Config.from_env()
+        config = Settings.from_env()
         assert config.env_loaded is True
         assert config.env_path == str(tmp_path / ".env")
 
@@ -186,9 +186,9 @@ class TestAuthTokenStorage:
         monkeypatch.setenv("KITE_API_KEY", "env_key")
         monkeypatch.setenv("KITE_API_SECRET", "env_secret")
 
-        from src.core.config import Config
+        from src.core.settings import Settings
 
-        config = Config.from_env()
+        config = Settings.from_env()
         assert config.env_loaded is True
         assert config.env_path == str(tmp_path / ".env")
 
@@ -225,9 +225,9 @@ class TestAuthTokenStorage:
         monkeypatch.setenv("KITE_API_KEY", "env_key")
         monkeypatch.setenv("KITE_API_SECRET", "env_secret")
 
-        from src.core.config import Config
+        from src.core.settings import Settings
 
-        config = Config.from_env()
+        config = Settings.from_env()
         assert config.env_loaded is True
         assert config.env_path == str(tmp_path / ".env")
 
@@ -268,9 +268,9 @@ class TestAuthTokenStorage:
         monkeypatch.setenv("KITE_API_KEY", "env_key")
         monkeypatch.setenv("KITE_API_SECRET", "env_secret")
 
-        from src.core.config import Config
+        from src.core.settings import Settings
 
-        config = Config.from_env()
+        config = Settings.from_env()
         assert config.env_loaded is True
         assert config.env_path == str(tmp_path / ".env")
 
