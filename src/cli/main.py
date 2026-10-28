@@ -106,7 +106,7 @@ def advise(
         console.print(f"[green]Applying Constraints: Min {min_w:.0%} | Max {max_w:.0%}[/green]")
 
     # --- 5. Delegate to PortfolioService ---
-    service = PortfolioService(config)
+    service = PortfolioService(config, data_engine=de)
 
     with console.status("[bold blue]Running portfolio advisory..."):
         try:
