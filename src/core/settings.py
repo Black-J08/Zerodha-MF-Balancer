@@ -1,4 +1,4 @@
-"""Configuration management for MF Balancer using pydantic-settings.
+"""Configuration management for MF Balancer.
 
 Centralizes paths, settings, and environment variable loading with type
 validation. Preserves the existing configuration-loading priority:
@@ -11,10 +11,10 @@ validation. Preserves the existing configuration-loading priority:
 """
 
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
-from pydantic import model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from dotenv import load_dotenv
 
 
 def _resolve_project_root() -> Path | None:
@@ -120,7 +120,8 @@ def _resolve_data_dir(env_dir: Path | None) -> Path:
     return candidate
 
 
-class Settings(BaseSettings):
+@dataclass
+class Settings:
     """Application configuration.
 
     Attributes:
@@ -145,32 +146,46 @@ class Settings(BaseSettings):
     env_loaded: bool = False
     env_path: str | None = None
 
-    model_config = SettingsConfigDict(env_file_encoding="utf-8")
+    def __post_init__(self) -> None:
+        """Load configuration from environment variables and .env file.
 
-    def __init__(self, **kwargs):
+        Follows .env loading priority:
+        1. .env in CWD (where mf-balancer is run)
+        2. Skip if KITE_API_KEY and KITE_API_SECRET already in os.environ
+        3. .env in project root
+        4. Raise ValueError if required vars still missing
+        """
         env_path = _resolve_env_path()
         env_loaded = env_path is not None
 
-        kwargs["_env_file"] = env_path
-        kwargs["env_loaded"] = env_loaded
-        kwargs["env_path"] = str(env_path) if env_path else None
+        # Load .env file if one was resolved (override=False so existing
+        # environment variables take precedence over .env values)
+        if env_path:
+            load_dotenv(env_path, override=False)
+
+        # Read credentials from environment (os.environ now includes .env
+        # values loaded above, with pre-existing env vars taking precedence)
+        self.kite_api_key = os.getenv("KITE_API_KEY")
+        self.kite_api_secret = os.getenv("KITE_API_SECRET")
+        self.kite_access_token = os.getenv("KITE_ACCESS_TOKEN")
+
+        self.env_loaded = env_loaded
+        self.env_path = str(env_path) if env_path else None
 
         env_dir = Path(env_path).parent if env_path else None
-        kwargs["data_dir"] = str(_resolve_data_dir(env_dir))
-        kwargs["output_dir"] = str(Path.cwd() / "output")
-        kwargs["reports_dir"] = str(Path.cwd() / "output" / "reports")
+        self.data_dir = str(_resolve_data_dir(env_dir))
+        self.output_dir = str(Path.cwd() / "output")
+        self.reports_dir = str(Path.cwd() / "output" / "reports")
 
-        super().__init__(**kwargs)
+        self._check_credentials()
 
-    @model_validator(mode="after")
-    def _check_credentials(self) -> "Settings":
+    def _check_credentials(self) -> None:
         """Validate that required API credentials are present."""
         if not self.kite_api_key or not self.kite_api_secret:
             raise ValueError(
                 "KITE_API_KEY and KITE_API_SECRET must be set in .env "
                 "or exported as environment variables"
             )
-        return self
 
     @classmethod
     def from_env(cls) -> "Settings":

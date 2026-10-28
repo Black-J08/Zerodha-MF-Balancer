@@ -144,20 +144,3 @@ def advise(
         )
 
     console.print(f"\n[bold green]Success![/bold green] Report saved to: [link={result.report_path}]{result.report_path}[/link]")
-
-
-@app.command()
-def serve(
-    host: str = typer.Option("127.0.0.1", help="Host to bind the API server to"),
-    port: int = typer.Option(8000, help="Port to bind the API server to"),
-    reload: bool = typer.Option(False, help="Enable auto-reload for development"),
-) -> None:
-    """Start the MF Balancer API server."""
-    import uvicorn
-
-    uvicorn.run(
-        "src.api.main:app",
-        host=host,
-        port=port,
-        reload=reload,
-    )

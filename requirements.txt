@@ -6,4 +6,3 @@ numpy
 typer
 rich
 python-dotenv
-scikit-learn

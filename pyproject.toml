@@ -12,10 +12,6 @@ dependencies = [
     "typer",
     "rich",
     "python-dotenv",
-    "scikit-learn",
-    "pydantic-settings",
-    "fastapi",
-    "uvicorn",
 ]
 
 [project.scripts]
