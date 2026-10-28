@@ -15,6 +15,8 @@
 ### User Experience
 - [x] **Interactive CLI**: Easy-to-use command line interface with rich text tables.
 - [x] **Interactive Auth**: Automated flow to handle Kite Connect login and token saving.
+    - [x] **Callback Server**: Lightweight built-in HTTP callback server (derived from `KITE_REDIRECT_URL`) automatically captures the `request_token` from Zerodha's redirect and shuts down gracefully.
+    - [x] **Manual Fallback**: Falls back to manual `request_token` entry (or full redirect URL with auto-extraction) if the callback server is unavailable or times out.
 - [x] **Smart Source Selection**: Lets user pick any fund from their portfolio to act as the "Debt Source".
 - [x] **Flexible Execution**:
     - [x] **Static Mode**: Generates a fixed monthly STP plan.

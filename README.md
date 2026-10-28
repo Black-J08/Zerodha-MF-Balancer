@@ -47,6 +47,15 @@ KITE_API_KEY=your_api_key_here
 KITE_API_SECRET=your_api_secret_here
 ```
 
+### Authentication Redirect URL (optional)
+For automatic `request_token` capture, configure a redirect URL in your Zerodha developer console and add it to `.env`:
+
+```env
+KITE_REDIRECT_URL=http://127.0.0.1:61035/callback
+```
+
+The redirect URL must include an explicit port and a non-empty callback path (e.g., `/callback`). When configured, the login flow starts a lightweight local callback server that automatically captures the `request_token` from Zerodha's redirect. If the callback server cannot start or times out, the tool falls back to the manual entry flow where you paste the `request_token` (or the full redirect URL) yourself.
+
 The `.env` file can be placed in either:
 - **The current directory** where you run `mf-balancer` (takes precedence), or
 - **The project root directory** (fallback if not found in CWD).
@@ -74,6 +83,8 @@ mf-balancer
 
 ### What happens next?
 1.  **Login**: If your session is expired, it will guide you to log in via your browser.
+    -   If `KITE_REDIRECT_URL` is configured in `.env`, a lightweight local callback server automatically captures the `request_token` from Zerodha's redirect.
+    -   Otherwise (or if the callback server is unavailable), you manually paste the `request_token` or the full redirect URL.
 2.  **Portfolio Fetch**: It downloads your current mutual fund holdings.
 3.  **Source Selection**: You will see a table of your funds. Enter the ID of the **Debt Fund** you want to use as the source of money.
 4.  **Optimization**: The script fetches historical data, calculates the optimal equity split, and determines the exact transfer amounts.

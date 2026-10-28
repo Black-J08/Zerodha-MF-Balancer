@@ -13,6 +13,7 @@ validation. Preserves the existing configuration-loading priority:
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
@@ -131,6 +132,9 @@ class Settings:
         kite_api_key: Zerodha Kite Connect API key.
         kite_api_secret: Zerodha Kite Connect API secret.
         kite_access_token: Zerodha Kite Connect access token (optional).
+        kite_redirect_url: Zerodha Kite Connect redirect URL (optional).
+            Used to derive the callback server host, port, and path for
+            automatic request_token capture.
         risk_free_rate: Risk-free rate for Sharpe ratio (default 0.07 = 7%).
         env_loaded: Whether a .env file was loaded.
         env_path: Path to the .env file that was loaded, if any.
@@ -139,6 +143,7 @@ class Settings:
     kite_api_key: str | None = None
     kite_api_secret: str | None = None
     kite_access_token: str | None = None
+    kite_redirect_url: str | None = None
     risk_free_rate: float = 0.07
     data_dir: str = ""
     output_dir: str = ""
@@ -168,6 +173,7 @@ class Settings:
         self.kite_api_key = os.getenv("KITE_API_KEY")
         self.kite_api_secret = os.getenv("KITE_API_SECRET")
         self.kite_access_token = os.getenv("KITE_ACCESS_TOKEN")
+        self.kite_redirect_url = os.getenv("KITE_REDIRECT_URL")
 
         self.env_loaded = env_loaded
         self.env_path = str(env_path) if env_path else None
@@ -178,6 +184,7 @@ class Settings:
         self.reports_dir = str(Path.cwd() / "output" / "reports")
 
         self._check_credentials()
+        self._validate_redirect_url()
 
     def _check_credentials(self) -> None:
         """Validate that required API credentials are present."""
@@ -186,6 +193,67 @@ class Settings:
                 "KITE_API_KEY and KITE_API_SECRET must be set in .env "
                 "or exported as environment variables"
             )
+
+    def _validate_redirect_url(self) -> None:
+        """Validate the redirect URL if provided.
+
+        The redirect URL must have an http/https scheme, a hostname, an
+        explicit port, and a path (which may be just "/"). The URL is used
+        exactly as configured; no default port or other component is added.
+
+        Raises:
+            ValueError: If the redirect URL is present but invalid.
+        """
+        if not self.kite_redirect_url:
+            return
+
+        parsed = urlparse(self.kite_redirect_url)
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError(
+                f"KITE_REDIRECT_URL must use http or https scheme, got: "
+                f"{self.kite_redirect_url!r}"
+            )
+        if not parsed.hostname:
+            raise ValueError(
+                f"KITE_REDIRECT_URL must include a hostname, got: "
+                f"{self.kite_redirect_url!r}"
+            )
+        if parsed.port is None:
+            raise ValueError(
+                f"KITE_REDIRECT_URL must include an explicit port, got: "
+                f"{self.kite_redirect_url!r}"
+            )
+        if not parsed.path:
+            raise ValueError(
+                f"KITE_REDIRECT_URL must include a path, got: "
+                f"{self.kite_redirect_url!r}"
+            )
+
+    @property
+    def kite_callback_host(self) -> str | None:
+        """Return the callback host derived from the redirect URL."""
+        if not self.kite_redirect_url:
+            return None
+        return urlparse(self.kite_redirect_url).hostname
+
+    @property
+    def kite_callback_port(self) -> int | None:
+        """Return the callback port derived from the redirect URL.
+
+        Returns the port exactly as configured in the URL, or None if no
+        port is specified. No default port is added.
+        """
+        if not self.kite_redirect_url:
+            return None
+        return urlparse(self.kite_redirect_url).port
+
+    @property
+    def kite_callback_path(self) -> str:
+        """Return the callback path derived from the redirect URL."""
+        if not self.kite_redirect_url:
+            return "/callback"
+        parsed = urlparse(self.kite_redirect_url)
+        return parsed.path or "/callback"
 
     @classmethod
     def from_env(cls) -> "Settings":

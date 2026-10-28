@@ -403,3 +403,153 @@ class TestSettingsEnvTracking:
         config = Settings.from_env()
         assert config.env_loaded is True
         assert config.env_path == str(project_root / ".env")
+
+
+class TestRedirectUrl:
+    """Tests for KITE_REDIRECT_URL parsing, derivation, and validation."""
+
+    def test_redirect_url_loaded_from_env(self, monkeypatch, tmp_path):
+        """KITE_REDIRECT_URL is loaded from environment variables."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("KITE_API_KEY", "env_key")
+        monkeypatch.setenv("KITE_API_SECRET", "env_secret")
+        monkeypatch.setenv("KITE_REDIRECT_URL", "http://127.0.0.1:61035/callback")
+
+        from src.core.settings import Settings
+
+        config = Settings.from_env()
+        assert config.kite_redirect_url == "http://127.0.0.1:61035/callback"
+
+    def test_redirect_url_loaded_from_dotenv(self, monkeypatch, tmp_path):
+        """KITE_REDIRECT_URL is loaded from .env file."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.delenv("KITE_API_KEY", raising=False)
+        monkeypatch.delenv("KITE_API_SECRET", raising=False)
+        monkeypatch.delenv("KITE_REDIRECT_URL", raising=False)
+        (tmp_path / ".env").write_text(
+            "KITE_API_KEY=cwd_key\n"
+            "KITE_API_SECRET=cwd_secret\n"
+            "KITE_REDIRECT_URL=http://127.0.0.1:61035/callback\n"
+        )
+
+        from src.core.settings import Settings
+
+        config = Settings.from_env()
+        assert config.kite_redirect_url == "http://127.0.0.1:61035/callback"
+
+    def test_redirect_url_none_when_not_set(self, monkeypatch, tmp_path):
+        """kite_redirect_url is None when KITE_REDIRECT_URL is not set."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.delenv("KITE_API_KEY", raising=False)
+        monkeypatch.delenv("KITE_API_SECRET", raising=False)
+        monkeypatch.delenv("KITE_REDIRECT_URL", raising=False)
+        (tmp_path / ".env").write_text(
+            "KITE_API_KEY=env_key\nKITE_API_SECRET=env_secret\n"
+        )
+
+        import src.core.settings as config_module
+        monkeypatch.setattr(
+            config_module, "PROJECT_ROOT", tmp_path.resolve()
+        )
+
+        from src.core.settings import Settings
+
+        config = Settings.from_env()
+        assert config.kite_redirect_url is None
+
+    def test_derived_callback_host(self, monkeypatch, tmp_path):
+        """kite_callback_host is derived from the redirect URL."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("KITE_API_KEY", "env_key")
+        monkeypatch.setenv("KITE_API_SECRET", "env_secret")
+        monkeypatch.setenv("KITE_REDIRECT_URL", "http://127.0.0.1:61035/callback")
+
+        from src.core.settings import Settings
+
+        config = Settings.from_env()
+        assert config.kite_callback_host == "127.0.0.1"
+
+    def test_derived_callback_port(self, monkeypatch, tmp_path):
+        """kite_callback_port is derived from the redirect URL exactly as configured."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("KITE_API_KEY", "env_key")
+        monkeypatch.setenv("KITE_API_SECRET", "env_secret")
+        monkeypatch.setenv("KITE_REDIRECT_URL", "http://127.0.0.1:61035/callback")
+
+        from src.core.settings import Settings
+
+        config = Settings.from_env()
+        assert config.kite_callback_port == 61035
+
+    def test_derived_callback_path(self, monkeypatch, tmp_path):
+        """kite_callback_path is derived from the redirect URL."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("KITE_API_KEY", "env_key")
+        monkeypatch.setenv("KITE_API_SECRET", "env_secret")
+        monkeypatch.setenv("KITE_REDIRECT_URL", "http://127.0.0.1:61035/callback")
+
+        from src.core.settings import Settings
+
+        config = Settings.from_env()
+        assert config.kite_callback_path == "/callback"
+
+    def test_redirect_url_invalid_scheme_raises(self, monkeypatch, tmp_path):
+        """Invalid scheme raises ValueError."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("KITE_API_KEY", "env_key")
+        monkeypatch.setenv("KITE_API_SECRET", "env_secret")
+        monkeypatch.setenv("KITE_REDIRECT_URL", "ftp://127.0.0.1:61035/callback")
+
+        from src.core.settings import Settings
+
+        with pytest.raises(ValueError, match="must use http or https scheme"):
+            Settings.from_env()
+
+    def test_redirect_url_missing_hostname_raises(self, monkeypatch, tmp_path):
+        """Missing hostname raises ValueError."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("KITE_API_KEY", "env_key")
+        monkeypatch.setenv("KITE_API_SECRET", "env_secret")
+        monkeypatch.setenv("KITE_REDIRECT_URL", "http://:61035/callback")
+
+        from src.core.settings import Settings
+
+        with pytest.raises(ValueError, match="must include a hostname"):
+            Settings.from_env()
+
+    def test_redirect_url_missing_port_raises(self, monkeypatch, tmp_path):
+        """Missing explicit port raises ValueError."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("KITE_API_KEY", "env_key")
+        monkeypatch.setenv("KITE_API_SECRET", "env_secret")
+        monkeypatch.setenv("KITE_REDIRECT_URL", "http://127.0.0.1/callback")
+
+        from src.core.settings import Settings
+
+        with pytest.raises(ValueError, match="must include an explicit port"):
+            Settings.from_env()
+
+    def test_redirect_url_missing_path_raises(self, monkeypatch, tmp_path):
+        """Missing path raises ValueError."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("KITE_API_KEY", "env_key")
+        monkeypatch.setenv("KITE_API_SECRET", "env_secret")
+        monkeypatch.setenv("KITE_REDIRECT_URL", "http://127.0.0.1:61035")
+
+        from src.core.settings import Settings
+
+        with pytest.raises(ValueError, match="must include a path"):
+            Settings.from_env()
+
+    def test_redirect_url_root_path_accepted(self, monkeypatch, tmp_path):
+        """Path of just '/' is accepted."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("KITE_API_KEY", "env_key")
+        monkeypatch.setenv("KITE_API_SECRET", "env_secret")
+        monkeypatch.setenv("KITE_REDIRECT_URL", "http://127.0.0.1:61035/")
+
+        from src.core.settings import Settings
+
+        config = Settings.from_env()
+        assert config.kite_redirect_url == "http://127.0.0.1:61035/"
+        assert config.kite_callback_path == "/"
