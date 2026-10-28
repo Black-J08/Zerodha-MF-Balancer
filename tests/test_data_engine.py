@@ -7,6 +7,7 @@ and plan/option validation.
 from unittest.mock import MagicMock
 
 import pytest
+from kiteconnect import KiteConnect
 
 from src.data.engine import DataEngine
 
@@ -143,3 +144,42 @@ class TestDataEngine:
             "PARAG PARIKH FLEXI CAP FUND - DIRECT PLAN", isin="INF999999"
         )
         assert code == "123456", f"Expected 123456 (name fallback), got {code}"
+
+
+class TestDataEngineKiteInitialization:
+    """Regression tests for DataEngine Kite Connect initialization.
+
+    Regression: authenticate() returns an authenticated KiteConnect instance,
+    but its return value was discarded, so DataEngine built a KiteConnect
+    without an access token on first run, causing "Kite Connect not initialized"
+    when fetching holdings.
+    """
+
+    def test_uses_provided_authenticated_kite(self):
+        """DataEngine should use the provided authenticated KiteConnect instance."""
+        engine = DataEngine.__new__(DataEngine)
+        engine.mftool = MagicMock()
+        engine.config = MagicMock()
+        engine.config.kite_api_key = "some_key"
+        engine.config.kite_access_token = None
+
+        mock_kite = MagicMock(spec=KiteConnect)
+        mock_kite.access_token = "fresh_access_token"
+
+        engine.__init__(MagicMock(), kite=mock_kite)
+
+        assert engine.kite is mock_kite
+
+    def test_falls_back_to_config_when_no_kite_provided(self):
+        """DataEngine should build KiteConnect from config when no kite provided."""
+        engine = DataEngine.__new__(DataEngine)
+        engine.mftool = MagicMock()
+
+        config = MagicMock()
+        config.kite_api_key = "some_key"
+        config.kite_access_token = "stored_token"
+
+        engine.__init__(config, kite=None)
+
+        assert engine.kite is not None
+        assert engine.kite.access_token == "stored_token"

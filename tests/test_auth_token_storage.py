@@ -35,7 +35,12 @@ class TestAuthTokenStorage:
             "access_token": "new_access_token"
         }
 
+        mock_server = MagicMock()
+        mock_server.wait_for_token.return_value = "captured_token"
+
         with patch("src.cli.auth.KiteConnect", return_value=mock_kite), patch(
+            "src.cli.auth.CallbackServer", return_value=mock_server
+        ), patch(
             "rich.prompt.Prompt.ask", return_value="request_token_123"
         ):
             authenticate(config)
@@ -74,7 +79,12 @@ class TestAuthTokenStorage:
             "access_token": "new_access_token"
         }
 
+        mock_server = MagicMock()
+        mock_server.wait_for_token.return_value = "captured_token"
+
         with patch("src.cli.auth.KiteConnect", return_value=mock_kite), patch(
+            "src.cli.auth.CallbackServer", return_value=mock_server
+        ), patch(
             "rich.prompt.Prompt.ask", return_value="request_token_123"
         ):
             authenticate(config)
@@ -104,7 +114,12 @@ class TestAuthTokenStorage:
             "access_token": "new_access_token"
         }
 
+        mock_server = MagicMock()
+        mock_server.wait_for_token.return_value = "captured_token"
+
         with patch("src.cli.auth.KiteConnect", return_value=mock_kite), patch(
+            "src.cli.auth.CallbackServer", return_value=mock_server
+        ), patch(
             "rich.prompt.Prompt.ask", return_value="request_token_123"
         ):
             authenticate(config)
@@ -132,7 +147,12 @@ class TestAuthTokenStorage:
             "access_token": "new_access_token"
         }
 
+        mock_server = MagicMock()
+        mock_server.wait_for_token.return_value = "captured_token"
+
         with patch("src.cli.auth.KiteConnect", return_value=mock_kite), patch(
+            "src.cli.auth.CallbackServer", return_value=mock_server
+        ), patch(
             "rich.prompt.Prompt.ask", return_value="request_token_123"
         ):
             authenticate(config)
@@ -164,7 +184,12 @@ class TestAuthTokenStorage:
             "access_token": "new_access_token"
         }
 
+        mock_server = MagicMock()
+        mock_server.wait_for_token.return_value = "captured_token"
+
         with patch("src.cli.auth.KiteConnect", return_value=mock_kite), patch(
+            "src.cli.auth.CallbackServer", return_value=mock_server
+        ), patch(
             "rich.prompt.Prompt.ask", return_value="request_token_123"
         ):
             authenticate(config)
@@ -199,7 +224,12 @@ class TestAuthTokenStorage:
             "access_token": "new_access_token"
         }
 
+        mock_server = MagicMock()
+        mock_server.wait_for_token.return_value = "captured_token"
+
         with patch("src.cli.auth.KiteConnect", return_value=mock_kite), patch(
+            "src.cli.auth.CallbackServer", return_value=mock_server
+        ), patch(
             "rich.prompt.Prompt.ask", return_value="request_token_123"
         ):
             authenticate(config)
@@ -238,7 +268,12 @@ class TestAuthTokenStorage:
             "access_token": "new_access_token"
         }
 
+        mock_server = MagicMock()
+        mock_server.wait_for_token.return_value = "captured_token"
+
         with patch("src.cli.auth.KiteConnect", return_value=mock_kite), patch(
+            "src.cli.auth.CallbackServer", return_value=mock_server
+        ), patch(
             "rich.prompt.Prompt.ask", return_value="request_token_123"
         ):
             authenticate(config)
@@ -281,7 +316,12 @@ class TestAuthTokenStorage:
             "access_token": "new_access_token"
         }
 
+        mock_server = MagicMock()
+        mock_server.wait_for_token.return_value = "captured_token"
+
         with patch("src.cli.auth.KiteConnect", return_value=mock_kite), patch(
+            "src.cli.auth.CallbackServer", return_value=mock_server
+        ), patch(
             "rich.prompt.Prompt.ask", return_value="request_token_123"
         ):
             authenticate(config)

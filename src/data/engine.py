@@ -29,11 +29,15 @@ class DataEngine:
         config: Application configuration containing API credentials and paths.
     """
 
-    def __init__(self, config: Settings):
+    def __init__(self, config: Settings, kite: KiteConnect | None = None):
         self.config = config
         self.mftool = Mftool()
 
-        if config.kite_api_key and config.kite_access_token:
+        # Use the provided authenticated KiteConnect instance (e.g. from
+        # authenticate()) if available; otherwise build one from config.
+        if kite is not None:
+            self.kite = kite
+        elif config.kite_api_key and config.kite_access_token:
             self.kite = KiteConnect(api_key=config.kite_api_key)
             self.kite.set_access_token(config.kite_access_token)
         else:

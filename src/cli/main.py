@@ -33,10 +33,10 @@ def advise(
     config = Settings.from_env()
 
     # --- 1. Authentication ---
-    authenticate(config)
+    kite = authenticate(config)
 
     # --- 2. Portfolio Fetching (for interactive source fund selection) ---
-    de = DataEngine(config)
+    de = DataEngine(config, kite=kite)
 
     with console.status("[bold green]Fetching Portfolio Holdings..."):
         holdings_df = de.get_portfolio_holdings()
