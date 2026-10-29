@@ -3,6 +3,7 @@
 Handles login, session verification, and token persistence.
 """
 
+import os
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -51,13 +52,24 @@ def _persist_token(config: Settings, access_token: str) -> None:
     """Persist the access token to the appropriate .env file.
 
     Writes to the .env that was loaded (CWD or project root), otherwise
-    creates a new .env in CWD.
+    creates a new .env in CWD. Also updates ``os.environ`` and
+    ``config.kite_access_token`` so the new token is immediately available
+    to the current session and to any subsequently created :class:`Settings`
+    instance. Without this, ``load_dotenv(override=False)`` would keep a
+    stale ``KITE_ACCESS_TOKEN`` from ``os.environ`` on the next run, causing
+    repeated ``TokenException`` errors and login prompts.
     """
     if config.env_loaded and config.env_path:
         token_env_path = Path(config.env_path)
     else:
         token_env_path = Path.cwd() / ".env"
     set_key(token_env_path, "KITE_ACCESS_TOKEN", access_token, quote_mode="never")
+    # Update os.environ so the new token is visible to future Settings
+    # instances (load_dotenv(override=False) won't override an existing
+    # KITE_ACCESS_TOKEN from os.environ).
+    os.environ["KITE_ACCESS_TOKEN"] = access_token
+    # Update the current config so the live kite client uses the new token.
+    config.kite_access_token = access_token
     console.print("[green]New Access Token saved.[/green]")
 
 

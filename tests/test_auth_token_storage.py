@@ -5,6 +5,7 @@ Tests that the Kite access token is written to the correct .env file:
 - A new .env in CWD when no .env was loaded.
 """
 
+import os
 from unittest.mock import MagicMock, patch
 
 from src.cli.auth import authenticate
@@ -339,3 +340,80 @@ class TestAuthTokenStorage:
         assert env_content == expected_env, (
             f"Expected:\n{expected_env!r}\nGot:\n{env_content!r}"
         )
+
+    def test_persisted_token_updates_os_environ(self, monkeypatch, tmp_path):
+        """Regression: _persist_token must update os.environ so load_dotenv(override=False)
+        does not keep a stale KITE_ACCESS_TOKEN on the next run."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".env").write_text(
+            "KITE_API_KEY=env_key\nKITE_API_SECRET=env_secret\n"
+        )
+        monkeypatch.setenv("KITE_API_KEY", "env_key")
+        monkeypatch.setenv("KITE_API_SECRET", "env_secret")
+        # Pre-existing stale token in os.environ (simulates a shell env var)
+        monkeypatch.setenv("KITE_ACCESS_TOKEN", "stale_token")
+
+        from src.core.settings import Settings
+
+        config = Settings.from_env()
+        assert config.env_loaded is True
+        assert config.env_path == str(tmp_path / ".env")
+
+        mock_kite = MagicMock()
+        mock_kite.profile.side_effect = Exception("session expired")
+        mock_kite.login_url.return_value = "https://example.com/login"
+        mock_kite.generate_session.return_value = {
+            "access_token": "new_access_token"
+        }
+
+        mock_server = MagicMock()
+        mock_server.wait_for_token.return_value = "captured_token"
+
+        with patch("src.cli.auth.KiteConnect", return_value=mock_kite), patch(
+            "src.cli.auth.CallbackServer", return_value=mock_server
+        ), patch(
+            "rich.prompt.Prompt.ask", return_value="request_token_123"
+        ):
+            authenticate(config)
+
+        # os.environ must now hold the new token, not the stale one
+        assert os.environ.get("KITE_ACCESS_TOKEN") == "new_access_token", (
+            f"Expected new_access_token in os.environ, got {os.environ.get('KITE_ACCESS_TOKEN')!r}"
+        )
+        # The config object must also reflect the new token
+        assert config.kite_access_token == "new_access_token"
+
+    def test_persisted_token_updates_config(self, monkeypatch, tmp_path):
+        """Regression: _persist_token must update config.kite_access_token so the
+        live kite client uses the new token immediately."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".env").write_text(
+            "KITE_API_KEY=env_key\nKITE_API_SECRET=env_secret\n"
+        )
+        monkeypatch.setenv("KITE_API_KEY", "env_key")
+        monkeypatch.setenv("KITE_API_SECRET", "env_secret")
+
+        from src.core.settings import Settings
+
+        config = Settings.from_env()
+        assert config.env_loaded is True
+        assert config.env_path == str(tmp_path / ".env")
+
+        mock_kite = MagicMock()
+        mock_kite.profile.side_effect = Exception("session expired")
+        mock_kite.login_url.return_value = "https://example.com/login"
+        mock_kite.generate_session.return_value = {
+            "access_token": "new_access_token"
+        }
+
+        mock_server = MagicMock()
+        mock_server.wait_for_token.return_value = "captured_token"
+
+        with patch("src.cli.auth.KiteConnect", return_value=mock_kite), patch(
+            "src.cli.auth.CallbackServer", return_value=mock_server
+        ), patch(
+            "rich.prompt.Prompt.ask", return_value="request_token_123"
+        ):
+            authenticate(config)
+
+        assert config.kite_access_token == "new_access_token"

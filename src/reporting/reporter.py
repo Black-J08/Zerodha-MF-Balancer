@@ -10,6 +10,7 @@ from datetime import datetime
 from rich.console import Console
 
 from src.core.logging import get_logger
+from src.core.models import FundExclusion
 from src.core.settings import Settings
 
 logger = get_logger(__name__)
@@ -35,6 +36,7 @@ class Reporter:
         duration: int = 12,
         current_stats: dict | None = None,
         optimized_stats: dict | None = None,
+        excluded_funds: list[FundExclusion] | None = None,
     ) -> str:
         """Generate a Markdown report and save it to disk.
 
@@ -45,6 +47,8 @@ class Reporter:
             duration: Planning horizon in months (default 12).
             current_stats: Optional current portfolio stats dict.
             optimized_stats: Optional optimized portfolio stats dict.
+            excluded_funds: Optional list of :class:`FundExclusion` for funds
+                excluded from optimization, each with a reason and detail.
 
         Returns:
             The file path of the generated report.
@@ -144,6 +148,14 @@ The following weights were calculated using Maximum Sharpe Ratio optimization:
         md_content += "- **Action**: Execute *only* this month's installment manually (or as a one-time order).\n"
         md_content += "- **Next Step**: Run this script again **next month**.\n"
         md_content += "- **Benefit**: This allows the algorithm to adjust the transfer amounts based on market highs and lows (buying more in dips).\n"
+
+        # --- Excluded Funds Section ---
+        if excluded_funds:
+            md_content += "\n## 6. Excluded Funds\n"
+            md_content += "The following funds were excluded from optimization, with the reason for each exclusion:\n\n"
+            md_content += "| Fund | Reason | Detail |\n| :--- | :--- | :--- |\n"
+            for exclusion in excluded_funds:
+                md_content += f"| {exclusion.fund_name} | {exclusion.reason} | {exclusion.detail or ''} |\n"
 
         with open(filepath, "w") as f:
             f.write(md_content)

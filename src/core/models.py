@@ -103,3 +103,19 @@ class TransferPlan:
     monthly_budget: float
     duration_months: int
     total_monthly_outflow: float
+
+
+@dataclass(frozen=True)
+class FundExclusion:
+    """A mutual fund excluded from optimization, with the reason.
+
+    Attributes:
+        fund_name: Human-readable fund name (e.g. from Zerodha holdings).
+        reason: Human-readable exclusion reason (e.g. "Scheme code not found").
+        detail: Optional additional validation detail (e.g. days found vs.
+            required, exception type name).
+    """
+
+    fund_name: str
+    reason: str
+    detail: str | None = None

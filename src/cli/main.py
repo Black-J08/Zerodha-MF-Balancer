@@ -138,9 +138,22 @@ def advise(
         f"Optimized Sharpe: {optimized_sharpe:.2f}"
     )
 
-    if result.skipped_funds:
-        console.print(
-            f"\n[yellow]Warning:[/yellow] The following funds are excluded from optimization due to missing data: {result.skipped_funds}"
+    if result.excluded_funds:
+        table = Table(
+            title="[yellow]Excluded Funds[/yellow]",
+            show_header=True,
+            header_style="bold yellow",
         )
+        table.add_column("Fund Name", style="dim")
+        table.add_column("Reason")
+        table.add_column("Detail")
+        for exclusion in result.excluded_funds:
+            table.add_row(
+                exclusion.fund_name,
+                exclusion.reason,
+                exclusion.detail or "",
+            )
+        console.print("\n")
+        console.print(table)
 
     console.print(f"\n[bold green]Success![/bold green] Report saved to: [link={result.report_path}]{result.report_path}[/link]")

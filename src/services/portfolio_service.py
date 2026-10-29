@@ -21,6 +21,7 @@ import pandas as pd
 
 from src.allocation import Allocator
 from src.core.logging import get_logger
+from src.core.models import FundExclusion
 from src.core.settings import Settings
 from src.data import DataEngine
 from src.optimization import PortfolioOptimizer
@@ -40,7 +41,8 @@ class AdvisoryResult:
         current_stats: Current portfolio advanced stats, or None.
         optimized_stats: Optimized portfolio advanced stats, or None.
         report_path: Path to the generated Markdown report.
-        skipped_funds: Set of fund names excluded from optimization.
+        excluded_funds: List of :class:`FundExclusion` for funds excluded from
+            optimization, each with a reason and optional detail.
         valid_funds: List of fund names included in optimization.
         debt_capital: Total debt capital used (INR).
         months: Planning horizon in months.
@@ -52,7 +54,7 @@ class AdvisoryResult:
     current_stats: dict | None
     optimized_stats: dict | None
     report_path: str
-    skipped_funds: set[str]
+    excluded_funds: list[FundExclusion]
     valid_funds: list[str]
     debt_capital: float
     months: int
@@ -133,33 +135,63 @@ class PortfolioService:
 
         # --- 5. Fetch Real NAVs ---
         nav_data = pd.DataFrame()
+        excluded_funds: list[FundExclusion] = []
         for fund_name in equity_holdings:
             isin = fund_isin_map.get(fund_name)
             code = self.data_engine.get_scheme_code_for_fund(fund_name, isin=isin)
 
-            if code:
-                try:
-                    nav_series = self.data_engine.get_historical_nav(code)
-                    if nav_series.empty:
-                        logger.warning("No data returned for %s (Code: %s). Skipping.", fund_name, code)
-                        continue
-
-                    if len(nav_series) < 30:
-                        logger.warning(
-                            "Insufficient history (%d days) for %s. Need >30. Skipping.",
-                            len(nav_series),
-                            fund_name,
-                        )
-                        continue
-
-                    nav_data[fund_name] = nav_series
-                except Exception:
-                    logger.exception("NAV fetch failed for %s", fund_name)
-            else:
+            if code is None:
+                excluded_funds.append(
+                    FundExclusion(
+                        fund_name=fund_name,
+                        reason="Scheme code not found",
+                        detail=None,
+                    )
+                )
                 logger.warning(
                     "Could not map fund name to AMFI Code automatically for %s. Skipping.",
                     fund_name,
                 )
+                continue
+
+            try:
+                nav_series = self.data_engine.get_historical_nav(code)
+                if nav_series.empty:
+                    excluded_funds.append(
+                        FundExclusion(
+                            fund_name=fund_name,
+                            reason="No NAV data returned",
+                            detail=None,
+                        )
+                    )
+                    logger.warning("No data returned for %s (Code: %s). Skipping.", fund_name, code)
+                    continue
+
+                if len(nav_series) < 30:
+                    excluded_funds.append(
+                        FundExclusion(
+                            fund_name=fund_name,
+                            reason="Insufficient history",
+                            detail=f"{len(nav_series)} days found, 30 required",
+                        )
+                    )
+                    logger.warning(
+                        "Insufficient history (%d days) for %s. Need >30. Skipping.",
+                        len(nav_series),
+                        fund_name,
+                    )
+                    continue
+
+                nav_data[fund_name] = nav_series
+            except Exception:
+                excluded_funds.append(
+                    FundExclusion(
+                        fund_name=fund_name,
+                        reason="NAV fetch failed",
+                        detail=None,
+                    )
+                )
+                logger.exception("NAV fetch failed for %s", fund_name)
 
         valid_funds = nav_data.columns.tolist()
         if not valid_funds:
@@ -174,6 +206,14 @@ class PortfolioService:
             max_start = start_dates.max()
             culprits = start_dates[start_dates == max_start].index.tolist()
             nav_data = nav_data.drop(columns=culprits)
+            for culprit in culprits:
+                excluded_funds.append(
+                    FundExclusion(
+                        fund_name=culprit,
+                        reason="Dropped during data cleaning",
+                        detail="Insufficient overlapping period",
+                    )
+                )
             valid_funds = nav_data.columns.tolist()
 
             if nav_data.dropna().empty:
@@ -190,7 +230,6 @@ class PortfolioService:
         equity_holdings_optimized = {
             k: v for k, v in equity_holdings.items() if k in valid_funds
         }
-        skipped_funds = set(equity_holdings.keys()) - set(valid_funds)
 
         # --- 6. Optimize ---
         optimizer = PortfolioOptimizer(nav_data, self.settings)
@@ -230,6 +269,7 @@ class PortfolioService:
             duration=months,
             current_stats=current_stats,
             optimized_stats=optimized_stats,
+            excluded_funds=excluded_funds,
         )
 
         return AdvisoryResult(
@@ -239,7 +279,7 @@ class PortfolioService:
             current_stats=current_stats,
             optimized_stats=optimized_stats,
             report_path=report_path,
-            skipped_funds=skipped_funds,
+            excluded_funds=excluded_funds,
             valid_funds=valid_funds,
             debt_capital=debt_capital,
             months=months,
