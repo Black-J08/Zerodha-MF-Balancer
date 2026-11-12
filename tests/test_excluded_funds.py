@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 import pandas as pd
 import pytest
 
+from src.core.evaluation import EvaluationMode
 from src.services import PortfolioService
 
 
@@ -93,11 +94,12 @@ def test_exclusion_when_scheme_code_not_found(mock_data_engine):
     service.settings.data_dir = "/tmp/mf_balancer_test"
     service.settings.reports_dir = "/tmp/mf_balancer_test/reports"
 
-    result = service.run_advisory(
-        debt_capital=10000.0,
+    result = service.evaluate(
+        mode=EvaluationMode.MASTER_FUND,
         months=12,
         risk_free_rate=0.07,
         source_fund_name=None,
+        total_capital=10000.0,
     )
 
     excluded_names = {e.fund_name for e in result.excluded_funds}
@@ -137,11 +139,12 @@ def test_exclusion_when_no_nav_data(mock_data_engine):
     service.settings.data_dir = "/tmp/mf_balancer_test"
     service.settings.reports_dir = "/tmp/mf_balancer_test/reports"
 
-    result = service.run_advisory(
-        debt_capital=10000.0,
+    result = service.evaluate(
+        mode=EvaluationMode.MASTER_FUND,
         months=12,
         risk_free_rate=0.07,
         source_fund_name=None,
+        total_capital=10000.0,
     )
 
     excluded_names = {e.fund_name for e in result.excluded_funds}
@@ -181,11 +184,12 @@ def test_exclusion_when_insufficient_history(mock_data_engine):
     service.settings.data_dir = "/tmp/mf_balancer_test"
     service.settings.reports_dir = "/tmp/mf_balancer_test/reports"
 
-    result = service.run_advisory(
-        debt_capital=10000.0,
+    result = service.evaluate(
+        mode=EvaluationMode.MASTER_FUND,
         months=12,
         risk_free_rate=0.07,
         source_fund_name=None,
+        total_capital=10000.0,
     )
 
     excluded_names = {e.fund_name for e in result.excluded_funds}
@@ -224,11 +228,12 @@ def test_exclusion_when_nav_fetch_fails(mock_data_engine):
     service.settings.data_dir = "/tmp/mf_balancer_test"
     service.settings.reports_dir = "/tmp/mf_balancer_test/reports"
 
-    result = service.run_advisory(
-        debt_capital=10000.0,
+    result = service.evaluate(
+        mode=EvaluationMode.MASTER_FUND,
         months=12,
         risk_free_rate=0.07,
         source_fund_name=None,
+        total_capital=10000.0,
     )
 
     excluded_names = {e.fund_name for e in result.excluded_funds}
@@ -250,11 +255,12 @@ def test_valid_funds_not_excluded(mock_data_engine):
     service.settings.data_dir = "/tmp/mf_balancer_test"
     service.settings.reports_dir = "/tmp/mf_balancer_test/reports"
 
-    result = service.run_advisory(
-        debt_capital=10000.0,
+    result = service.evaluate(
+        mode=EvaluationMode.MASTER_FUND,
         months=12,
         risk_free_rate=0.07,
         source_fund_name=None,
+        total_capital=10000.0,
     )
 
     excluded_names = {e.fund_name for e in result.excluded_funds}
@@ -279,11 +285,12 @@ def test_no_fund_in_both_excluded_and_valid(mock_data_engine):
     service.settings.data_dir = "/tmp/mf_balancer_test"
     service.settings.reports_dir = "/tmp/mf_balancer_test/reports"
 
-    result = service.run_advisory(
-        debt_capital=10000.0,
+    result = service.evaluate(
+        mode=EvaluationMode.MASTER_FUND,
         months=12,
         risk_free_rate=0.07,
         source_fund_name=None,
+        total_capital=10000.0,
     )
 
     excluded_names = {e.fund_name for e in result.excluded_funds}

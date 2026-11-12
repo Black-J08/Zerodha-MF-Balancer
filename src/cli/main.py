@@ -10,6 +10,7 @@ from rich.prompt import FloatPrompt, IntPrompt
 from rich.table import Table
 
 from src.cli.auth import authenticate
+from src.core.evaluation import EvaluationMode
 from src.core.logging import get_logger
 from src.core.settings import Settings
 from src.data import DataEngine
@@ -24,9 +25,9 @@ app = typer.Typer()
 @app.command()
 def advise(
     debt_capital: float | None = typer.Option(
-        None, help="Total capital available in Debt Fund (Optional if selecting from portfolio)"
+        None, help="Total capital available for rebalancing (Optional if selecting from portfolio)"
     ),
-    months: int = typer.Option(12, help="Number of months to deplete the debt capital"),
+    months: int = typer.Option(12, help="Number of months to deploy the capital"),
     risk_factor: float = typer.Option(0.07, help="Risk free rate for Sharpe Ratio (decimal)"),
 ) -> None:
     """Run the Mutual Fund Balancer in Advisory Mode."""
@@ -35,7 +36,7 @@ def advise(
     # --- 1. Authentication ---
     kite = authenticate(config)
 
-    # --- 2. Portfolio Fetching (for interactive source fund selection) ---
+    # --- 2. Portfolio Fetching ---
     de = DataEngine(config, kite=kite)
 
     with console.status("[bold green]Fetching Portfolio Holdings..."):
@@ -45,31 +46,53 @@ def advise(
             raise typer.Exit()
         current_holdings = dict(zip(holdings_df["tradingsymbol"], holdings_df["value"]))
 
-    # --- 3. Select Source Debt Fund ---
-    source_fund_name: str | None = None
-    if debt_capital is None:
-        console.print("\n[bold cyan]Select your 'Master Debt Fund' (Source of Capital):[/bold cyan]")
-        funds = list(current_holdings.keys())
+    # --- 3. Select Evaluation Mode ---
+    console.print("\n[bold cyan]Select Evaluation Mode:[/bold cyan]")
+    console.print("1. [bold]MPT-Optimal Portfolio[/bold] (New)")
+    console.print("   [dim]- Maximum Sharpe Ratio across ALL eligible holdings.[/dim]")
+    console.print("   [dim]- No master fund; total portfolio value is the capital basis.[/dim]")
 
-        table = Table(show_header=True, header_style="bold magenta")
-        table.add_column("ID", style="dim", width=4)
-        table.add_column("Fund Name")
-        table.add_column("Current Value", justify="right")
+    console.print("2. [bold]Master Fund Based[/bold] (Existing)")
+    console.print("   [dim]- Select a master debt fund as capital source.[/dim]")
+    console.print("   [dim]- Master fund excluded from equity optimization.[/dim]")
 
-        for idx, fund in enumerate(funds):
-            table.add_row(str(idx + 1), fund, f"₹{current_holdings[fund]:,.2f}")
-        console.print(table)
+    mode_choice = IntPrompt.ask("Enter Choice", choices=["1", "2"], default=1)
 
-        choice = IntPrompt.ask(f"Enter ID of the Debt Fund (1-{len(funds)})")
-        if 1 <= choice <= len(funds):
-            source_fund_name = funds[choice - 1]
-            debt_capital = current_holdings[source_fund_name]
+    if mode_choice == 1:
+        mode = EvaluationMode.MPT_OPTIMAL
+        source_fund_name: str | None = None
+        if debt_capital is None:
+            debt_capital = sum(current_holdings.values())
             console.print(
-                f"[green]Selected Source:[/green] {source_fund_name} (₹{debt_capital:,.2f})"
+                f"[green]Using Total Portfolio Value as capital:[/green] "
+                f"₹{debt_capital:,.2f}"
             )
-        else:
-            console.print("[red]Invalid selection![/red]")
-            raise typer.Exit(code=1)
+    else:
+        mode = EvaluationMode.MASTER_FUND
+        source_fund_name = None
+        if debt_capital is None:
+            console.print("\n[bold cyan]Select your 'Master Debt Fund' (Source of Capital):[/bold cyan]")
+            funds = list(current_holdings.keys())
+
+            table = Table(show_header=True, header_style="bold magenta")
+            table.add_column("ID", style="dim", width=4)
+            table.add_column("Fund Name")
+            table.add_column("Current Value", justify="right")
+
+            for idx, fund in enumerate(funds):
+                table.add_row(str(idx + 1), fund, f"₹{current_holdings[fund]:,.2f}")
+            console.print(table)
+
+            choice = IntPrompt.ask(f"Enter ID of the Debt Fund (1-{len(funds)})")
+            if 1 <= choice <= len(funds):
+                source_fund_name = funds[choice - 1]
+                debt_capital = current_holdings[source_fund_name]
+                console.print(
+                    f"[green]Selected Source:[/green] {source_fund_name} (₹{debt_capital:,.2f})"
+                )
+            else:
+                console.print("[red]Invalid selection![/red]")
+                raise typer.Exit(code=1)
 
     # --- 4. Optimization Strategy Selection ---
     console.print("\n[bold cyan]Select Optimization Strategy:[/bold cyan]")
@@ -108,26 +131,27 @@ def advise(
     # --- 5. Delegate to PortfolioService ---
     service = PortfolioService(config, data_engine=de)
 
-    with console.status("[bold blue]Running portfolio advisory..."):
+    with console.status("[bold blue]Running portfolio evaluation..."):
         try:
-            result = service.run_advisory(
-                debt_capital=debt_capital,
+            result = service.evaluate(
+                mode=mode,
                 months=months,
                 risk_free_rate=risk_factor,
                 source_fund_name=source_fund_name,
+                total_capital=debt_capital,
                 weight_bounds=weight_bounds,
             )
         except ValueError as e:
             console.print(f"[bold red]Error:[/bold red] {e}")
             raise typer.Exit(code=1)
         except Exception:
-            logger.exception("Advisory workflow failed")
-            console.print("[bold red]Advisory workflow failed.[/bold red]")
+            logger.exception("Portfolio evaluation failed")
+            console.print("[bold red]Portfolio evaluation failed.[/bold red]")
             raise typer.Exit(code=1)
 
     # --- 6. Display Results ---
-    console.print("\n[bold]Optimal Equity Allocation:[/bold]")
-    for f, w in result.optimal_weights.items():
+    console.print("\n[bold]Optimal Allocation:[/bold]")
+    for f, w in result.weights.items():
         console.print(f"- {f}: {w * 100:.1f}%")
 
     console.print("\n[bold]Portfolio Health Check:[/bold]")

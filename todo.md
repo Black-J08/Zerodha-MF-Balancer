@@ -15,5 +15,5 @@
 - ensure correct statistical calculations across the entire project
 - improve the report and output into something more informative and familiar for user
 - determine over-weighted fund in the portfolio which can be reduced from
-- minimum time period threshold
+- minimum time period threshold - exclude new funds along with their capital (exclude that funds' capital also)
 - currently choosing master fund, another evaluation without master fund and exact ideal MPT portfolio with max sharpe and a report generated then

@@ -5,5 +5,6 @@ access through the DataEngine class and supporting modules.
 """
 
 from src.data.engine import DataEngine
+from src.data.preparation import DataPreparation
 
-__all__ = ["DataEngine"]
+__all__ = ["DataEngine", "DataPreparation"]

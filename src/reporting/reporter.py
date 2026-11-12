@@ -9,6 +9,7 @@ from datetime import datetime
 
 from rich.console import Console
 
+from src.core.evaluation import EvaluationMode
 from src.core.logging import get_logger
 from src.core.models import FundExclusion
 from src.core.settings import Settings
@@ -37,6 +38,7 @@ class Reporter:
         current_stats: dict | None = None,
         optimized_stats: dict | None = None,
         excluded_funds: list[FundExclusion] | None = None,
+        mode: EvaluationMode = EvaluationMode.MASTER_FUND,
     ) -> str:
         """Generate a Markdown report and save it to disk.
 
@@ -49,6 +51,7 @@ class Reporter:
             optimized_stats: Optional optimized portfolio stats dict.
             excluded_funds: Optional list of :class:`FundExclusion` for funds
                 excluded from optimization, each with a reason and detail.
+            mode: The :class:`EvaluationMode` used, for mode-appropriate labels.
 
         Returns:
             The file path of the generated report.
@@ -59,6 +62,16 @@ class Reporter:
 
         total_projected = allocator_summary["Total_Projected"]
 
+        # Mode-appropriate labels
+        if mode == EvaluationMode.MPT_OPTIMAL:
+            capital_label = "Total Portfolio Capital"
+            capital_value = allocator_summary["Total_Capital"]
+            source_label = "Total Portfolio"
+        else:
+            capital_label = "Debt Capital Source"
+            capital_value = allocator_summary["Total_Capital"]
+            source_label = "Master Debt Fund"
+
         md_content = f"""# Mutual Fund Rebalancing Report
 **Date**: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
@@ -67,7 +80,7 @@ class Reporter:
 | :--- | :--- |
 | **Total Portfolio Value** | ₹{total_projected:,.2f} |
 | **Current Equity** | ₹{allocator_summary['Total_Equity']:,.2f} |
-| **Debt Capital Source** | ₹{allocator_summary['Debt_Capital']:,.2f} |
+| **{capital_label}** | ₹{capital_value:,.2f} |
 | **Planning Horizon** | {duration} Months |
 
 ## 2. Optimal Allocation (MPT)
@@ -120,21 +133,24 @@ The following weights were calculated using Maximum Sharpe Ratio optimization:
             md_content += "> *   **Higher Sharpe/Sortino** = Better return for every unit of risk taken.\n"
             md_content += "> *   **Lower Volatility/Drawdown** = Smoother ride, less crash-prone.\n"
 
-        md_content += "\n## 4. Recommended Monthly STP Plan\n"
-        md_content += "You can set up the following **Systematic Transfer Plans (STP)** to automate your investment:\n\n"
+        md_content += "\n## 4. Recommended Monthly Rebalancing Plan\n"
+        md_content += (
+            "You can set up the following **Systematic Transfer Plans (STP)** "
+            "to automate your investment:\n\n"
+        )
 
-        md_content += "| Source (Debt) | Target (Equity) | Monthly Installment | Duration |\n| :--- | :--- | :--- | :--- |\n"
+        md_content += f"| Source ({source_label}) | Target (Equity) | Monthly Installment | Duration |\n| :--- | :--- | :--- | :--- |\n"
 
         total_transfer = 0
         for fund, amount in transfers.items():
             if amount > 0:
-                md_content += f"| *Master Debt Fund* | {fund} | **₹{amount:,.2f}** | **{duration} Months** |\n"
+                md_content += f"| *{source_label}* | {fund} | **₹{amount:,.2f}** | **{duration} Months** |\n"
                 total_transfer += amount
 
         md_content += f"\n**Total Monthly Outflow**: **₹{total_transfer:,.2f}**\n"
 
         if total_transfer == 0:
-            md_content += "\n> **Note**: No transfers needed. Equity allocation is currently overweight or on target.\n"
+            md_content += "\n> **Note**: No transfers needed. Allocation is currently on target.\n"
 
         # Execution Strategy Section
 

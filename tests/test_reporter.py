@@ -7,6 +7,7 @@ import os
 
 import pytest
 
+from src.core.evaluation import EvaluationMode
 from src.core.settings import Settings
 from src.reporting import Reporter
 
@@ -29,14 +30,18 @@ class TestReporter:
 
         allocator_summary = {
             "Total_Equity": 150000.0,
-            "Debt_Capital": 50000.0,
+            "Total_Capital": 50000.0,
             "Total_Projected": 200000.0,
         }
         optimal_weights = {"Fund A": 0.6, "Fund B": 0.4}
         transfers = {"Fund A": 2500.0, "Fund B": 1666.67}
 
         filepath = reporter.generate_report(
-            allocator_summary, optimal_weights, transfers, duration=12
+            allocator_summary,
+            optimal_weights,
+            transfers,
+            duration=12,
+            mode=EvaluationMode.MASTER_FUND,
         )
 
         assert os.path.exists(filepath)
@@ -50,7 +55,7 @@ class TestReporter:
         assert "Optimal Allocation (MPT)" in content
         assert "Fund A" in content
         assert "Fund B" in content
-        assert "Monthly STP Plan" in content
+        assert "Monthly Rebalancing Plan" in content
 
     def test_generate_report_with_stats(self, config):
         """Test report generation with current and optimized stats."""
@@ -58,7 +63,7 @@ class TestReporter:
 
         allocator_summary = {
             "Total_Equity": 150000.0,
-            "Debt_Capital": 50000.0,
+            "Total_Capital": 50000.0,
             "Total_Projected": 200000.0,
         }
         optimal_weights = {"Fund A": 0.6, "Fund B": 0.4}
@@ -85,6 +90,7 @@ class TestReporter:
             duration=12,
             current_stats=current_stats,
             optimized_stats=optimized_stats,
+            mode=EvaluationMode.MASTER_FUND,
         )
 
         with open(filepath) as f:
@@ -100,17 +106,49 @@ class TestReporter:
 
         allocator_summary = {
             "Total_Equity": 200000.0,
-            "Debt_Capital": 50000.0,
+            "Total_Capital": 50000.0,
             "Total_Projected": 250000.0,
         }
         optimal_weights = {"Fund A": 0.8, "Fund B": 0.2}
         transfers = {"Fund A": 0.0, "Fund B": 0.0}
 
         filepath = reporter.generate_report(
-            allocator_summary, optimal_weights, transfers, duration=12
+            allocator_summary,
+            optimal_weights,
+            transfers,
+            duration=12,
+            mode=EvaluationMode.MASTER_FUND,
         )
 
         with open(filepath) as f:
             content = f.read()
 
         assert "No transfers needed" in content
+
+    def test_generate_report_mpt_optimal_labels(self, config):
+        """Test MPT-Optimal mode uses Total Portfolio Capital labels."""
+        reporter = Reporter(config)
+
+        allocator_summary = {
+            "Total_Equity": 150000.0,
+            "Total_Capital": 150000.0,
+            "Total_Projected": 300000.0,
+        }
+        optimal_weights = {"Fund A": 0.6, "Fund B": 0.4}
+        transfers = {"Fund A": 2500.0, "Fund B": 1666.67}
+
+        filepath = reporter.generate_report(
+            allocator_summary,
+            optimal_weights,
+            transfers,
+            duration=12,
+            mode=EvaluationMode.MPT_OPTIMAL,
+        )
+
+        with open(filepath) as f:
+            content = f.read()
+
+        assert "Total Portfolio Capital" in content
+        assert "Total Portfolio" in content
+        assert "Debt Capital Source" not in content
+        assert "Master Debt Fund" not in content

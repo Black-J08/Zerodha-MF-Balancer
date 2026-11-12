@@ -1,7 +1,7 @@
-"""Allocator: STP transfer amount calculation.
+"""Allocator: portfolio rebalancing transfer amount calculation.
 
-Implements Target Duration Convergence STP logic:
-1. Monthly Budget = Debt Capital / Remaining Months
+Implements Target Duration Convergence rebalancing logic:
+1. Monthly Budget = Total Capital / Remaining Months
 2. Distribute budget to funds proportional to their shortfall
    (target value - current value).
 """
@@ -12,43 +12,43 @@ logger = get_logger(__name__)
 
 
 class Allocator:
-    """Computes monthly STP transfer amounts from debt to equity funds.
+    """Computes monthly rebalancing transfer amounts to reach target weights.
 
     Args:
         current_holdings: Dict of {fund_name: current_value_INR}.
-        debt_capital: Total capital available in Debt Fund (source).
+        total_capital: Total capital available for rebalancing (INR).
         optimal_weights: Dict of {fund_name: target_weight (0.0 to 1.0)}.
-        remaining_months: Number of months to deplete the debt capital.
+        remaining_months: Number of months to deploy the capital.
     """
 
     def __init__(
         self,
         current_holdings: dict[str, float],
-        debt_capital: float,
+        total_capital: float,
         optimal_weights: dict[str, float],
         remaining_months: int,
     ):
         self.current_holdings = current_holdings
-        self.debt_capital = debt_capital
+        self.total_capital = total_capital
         self.optimal_weights = optimal_weights
         self.remaining_months = max(1, remaining_months)  # Avoid div by zero
 
     def calculate_transfers(self) -> dict[str, float]:
         """Compute monthly transfer amounts per fund.
 
-        Implements 'Target Duration Convergence STP':
-        1. Monthly Budget = Debt / Remaining Months.
+        Implements 'Target Duration Convergence Rebalancing':
+        1. Monthly Budget = Total Capital / Remaining Months.
         2. Distribute budget to funds proportional to their shortfall.
 
         Returns:
             Dict of {fund_name: monthly_transfer_amount_INR}.
         """
         # 1. Monthly Budget (Strict Deployment)
-        monthly_budget = self.debt_capital / self.remaining_months
+        monthly_budget = self.total_capital / self.remaining_months
 
         # 2. Calculate Shortfalls
         current_equity_value = sum(self.current_holdings.values())
-        total_future_value = current_equity_value + self.debt_capital
+        total_future_value = current_equity_value + self.total_capital
 
         shortfalls: dict[str, float] = {}
         total_positive_shortfall = 0.0
@@ -84,11 +84,11 @@ class Allocator:
         """Return a summary dict of the allocation.
 
         Returns:
-            Dict with Total_Equity, Debt_Capital, Total_Projected.
+            Dict with Total_Equity, Total_Capital, Total_Projected.
         """
         return {
             "Total_Equity": sum(self.current_holdings.values()),
-            "Debt_Capital": self.debt_capital,
+            "Total_Capital": self.total_capital,
             "Total_Projected": sum(self.current_holdings.values())
-            + self.debt_capital,
+            + self.total_capital,
         }
