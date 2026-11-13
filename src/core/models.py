@@ -89,20 +89,103 @@ class AllocationResult:
 
 
 @dataclass(frozen=True)
-class TransferPlan:
-    """STP transfer plan from debt to equity funds.
+class FundAllocation:
+    """Unified representation of a fund's allocation change.
 
     Attributes:
-        transfers: Mapping of fund name to monthly transfer amount (INR).
-        monthly_budget: Total monthly budget available for transfers.
-        duration_months: Number of months to deplete debt capital.
-        total_monthly_outflow: Sum of all monthly transfers.
+        fund_name: Name of the fund.
+        current_weight: Current portfolio weight (0.0 to 1.0).
+        target_weight: Optimal target weight (0.0 to 1.0).
+        current_value: Current market value (INR).
+        target_value: Target market value (INR).
+        shortfall: target_value - current_value (positive = needs capital,
+            negative = excess capital available for redemption).
     """
 
-    transfers: dict[str, float]
-    monthly_budget: float
+    fund_name: str
+    current_weight: float
+    target_weight: float
+    current_value: float
+    target_value: float
+    shortfall: float
+
+
+@dataclass(frozen=True)
+class STPTransfer:
+    """A single fund-to-fund STP transfer.
+
+    Attributes:
+        source_fund: Name of the overweighted source fund (capital redeemed from).
+        target_fund: Name of the underweighted target fund (capital transferred to).
+        monthly_amount: Monthly transfer amount (INR).
+        duration_months: Number of months for this transfer.
+        total_amount: Total transfer amount over the duration (monthly × duration).
+    """
+
+    source_fund: str
+    target_fund: str
+    monthly_amount: float
     duration_months: int
-    total_monthly_outflow: float
+    total_amount: float
+
+
+@dataclass(frozen=True)
+class SIPAllocation:
+    """Monthly SIP contribution allocated to a single target fund.
+
+    Attributes:
+        target_fund: Name of the underweighted target fund.
+        monthly_amount: Monthly SIP amount allocated to this fund (INR).
+        percentage_of_contribution: Percentage of the total monthly SIP contribution.
+    """
+
+    target_fund: str
+    monthly_amount: float
+    percentage_of_contribution: float
+
+
+@dataclass(frozen=True)
+class LumpSumAllocation:
+    """One-time lump sum allocation to a single target fund.
+
+    Attributes:
+        target_fund: Name of the underweighted target fund.
+        amount: Lump sum amount allocated to this fund (INR).
+        percentage_of_total: Percentage of the total lump sum amount.
+    """
+
+    target_fund: str
+    amount: float
+    percentage_of_total: float
+
+
+@dataclass(frozen=True)
+class TransferPlan:
+    """Unified execution plan for STP, SIP, and Lump Sum strategies.
+
+    Attributes:
+        stp_transfers: List of fund-to-fund STP transfers (source → target).
+        stp_monthly_total: Total monthly STP outflow across all transfers (INR).
+        stp_duration_months: Duration in months for all STP transfers.
+        sip_allocations: List of monthly SIP allocations to target funds.
+        sip_monthly_total: Total monthly SIP contribution (INR).
+        lump_sum_allocations: List of one-time lump sum allocations to target funds.
+        lump_sum_total: Total lump sum amount required (INR).
+        shortfall_warnings: Audit warnings for unfulfilled targets or missing sources.
+        total_portfolio_value: Total portfolio value used as the basis (INR).
+        threshold_used: Shortfall threshold used to classify sources/targets (INR).
+    """
+
+    stp_transfers: list[STPTransfer]
+    stp_monthly_total: float
+    stp_duration_months: int
+    sip_allocations: list[SIPAllocation]
+    sip_monthly_total: float
+    lump_sum_allocations: list[LumpSumAllocation]
+    lump_sum_total: float
+    shortfall_warnings: list[str]
+    total_portfolio_value: float
+    threshold_used: float
 
 
 @dataclass(frozen=True)

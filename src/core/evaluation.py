@@ -11,7 +11,7 @@ Defines the mode-agnostic data structures used across portfolio evaluation:
 from dataclasses import dataclass, field
 from enum import Enum
 
-from src.core.models import FundExclusion
+from src.core.models import FundExclusion, TransferPlan
 
 
 class EvaluationMode(str, Enum):
@@ -40,7 +40,8 @@ class EvaluationResult:
         current_weights: Mapping of fund name to current value-weighted weight.
         optimized_stats: Advanced performance stats for the optimized portfolio.
         current_stats: Advanced performance stats for the current portfolio.
-        transfers: Mapping of fund name to monthly rebalancing amount (INR).
+        transfers: Unified :class:`TransferPlan` with STP, SIP, and Lump Sum
+            allocations for MPT_OPTIMAL mode, or a MASTER_FUND-compatible plan.
         summary: Summary dict with Total_Equity, Total_Capital, Total_Projected.
         report_path: Path to the generated Markdown report.
         excluded_funds: List of :class:`FundExclusion` for funds excluded from
@@ -55,7 +56,7 @@ class EvaluationResult:
     current_weights: dict[str, float]
     optimized_stats: dict | None
     current_stats: dict | None
-    transfers: dict[str, float]
+    transfers: TransferPlan
     summary: dict
     report_path: str
     excluded_funds: list[FundExclusion] = field(default_factory=list)

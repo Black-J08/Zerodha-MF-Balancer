@@ -11,7 +11,7 @@ from rich.console import Console
 
 from src.core.evaluation import EvaluationMode
 from src.core.logging import get_logger
-from src.core.models import FundExclusion
+from src.core.models import FundExclusion, TransferPlan
 from src.core.settings import Settings
 
 logger = get_logger(__name__)
@@ -31,9 +31,9 @@ class Reporter:
 
     def generate_report(
         self,
+        transfer_plan: TransferPlan,
         allocator_summary: dict,
         optimal_weights: dict,
-        transfers: dict,
         duration: int = 12,
         current_stats: dict | None = None,
         optimized_stats: dict | None = None,
@@ -45,9 +45,10 @@ class Reporter:
         """Generate a Markdown report and save it to disk.
 
         Args:
+            transfer_plan: Unified :class:`TransferPlan` with STP, SIP, and
+                Lump Sum allocations.
             allocator_summary: Summary dict from Allocator.get_summary().
             optimal_weights: Mapping of fund name to target weight.
-            transfers: Mapping of fund name to monthly transfer amount (STP).
             duration: Planning horizon in months (default 12).
             current_stats: Optional current portfolio stats dict.
             optimized_stats: Optional optimized portfolio stats dict.
@@ -86,7 +87,6 @@ class Reporter:
         )
 
         allocation_rows = []
-        total_shortfall = 0.0  # Additional capital needed for Lump Sum
         for fund in all_funds:
             current_w = current_weights.get(fund, 0.0) if current_weights else 0.0
             optimal_w = optimal_weights.get(fund, 0.0)
@@ -104,10 +104,6 @@ class Reporter:
             else:
                 action = "Hold"
 
-            # For Lump Sum: sum of positive shortfalls (additional capital needed)
-            if val_diff > 0:
-                total_shortfall += val_diff
-
             allocation_rows.append(
                 {
                     "fund": fund,
@@ -121,34 +117,12 @@ class Reporter:
                 }
             )
 
-        # --- STP: monthly transfer breakdown from Allocator ---
+        # --- STP: monthly transfer breakdown from TransferPlan ---
         stp_rows = []
         total_stp_monthly = 0.0
-        for fund, amount in sorted(
-            transfers.items(), key=lambda item: item[1], reverse=True
-        ):
-            if amount > 0:
-                stp_rows.append((fund, amount))
-                total_stp_monthly += amount
-
-        # --- SIP: fund-wise breakdown of monthly contribution ---
-        sip_rows = []
-        total_sip_monthly = 0.0
-        if sip_monthly_amount and sip_monthly_amount > 0:
-            # Distribute SIP contribution to underweighted funds proportional to shortfall
-            underweighted = [
-                r for r in allocation_rows if r["val_diff"] > 0
-            ]
-            total_underweight_shortfall = sum(r["val_diff"] for r in underweighted)
-            if total_underweight_shortfall > 0:
-                for row in underweighted:
-                    ratio = row["val_diff"] / total_underweight_shortfall
-                    monthly_alloc = ratio * sip_monthly_amount
-                    sip_rows.append((row["fund"], monthly_alloc))
-                total_sip_monthly = sip_monthly_amount
-
-        # --- Lump Sum: exact additional capital needed ---
-        lump_sum_needed = round(total_shortfall, 2)
+        for stp in transfer_plan.stp_transfers:
+            stp_rows.append((stp.source_fund, stp.target_fund, stp.monthly_amount, stp.duration_months, stp.total_amount))
+            total_stp_monthly += stp.monthly_amount
 
         md_content = f"""# Mutual Fund Rebalancing Report
 **Date**: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
@@ -223,11 +197,23 @@ target allocation calculated using Maximum Sharpe Ratio optimization:
         md_content += "- **Why Recommended**: Uses capital you already have invested; no new money needed. Reduces concentration risk systematically.\n\n"
 
         md_content += "#### Monthly STP Transfer Plan\n"
-        md_content += f"| Source ({source_label}) | Target Fund | Monthly Installment | Duration |\n"
-        md_content += "| :--- | :--- | :--- | :--- |\n"
-
-        for fund, amount in stp_rows:
-            md_content += f"| *{source_label}* | {fund} | **₹{amount:,.2f}** | **{duration} Months** |\n"
+        if mode == EvaluationMode.MPT_OPTIMAL:
+            md_content += "| Source Fund | Target Fund | Monthly Installment | Duration | Total Amount |\n"
+            md_content += "| :--- | :--- | :--- | :--- | :--- |\n"
+            for source_fund, target_fund, amount, dur, total_amt in stp_rows:
+                md_content += (
+                    f"| {source_fund} | {target_fund} | "
+                    f"**₹{amount:,.2f}** | **{dur} Months** | "
+                    f"**₹{total_amt:,.2f}** |\n"
+            )
+        else:
+            md_content += f"| Source ({source_label}) | Target Fund | Monthly Installment | Duration |\n"
+            md_content += "| :--- | :--- | :--- | :--- |\n"
+            for source_fund, target_fund, amount, dur, total_amt in stp_rows:
+                md_content += (
+                    f"| *{source_label}* | {target_fund} | "
+                    f"**₹{amount:,.2f}** | **{dur} Months** |\n"
+                )
 
         md_content += f"\n**Total Monthly Outflow**: **₹{total_stp_monthly:,.2f}**\n\n"
 
@@ -245,11 +231,13 @@ target allocation calculated using Maximum Sharpe Ratio optimization:
             md_content += "| Target Fund | Monthly Allocation | % of Contribution |\n"
             md_content += "| :--- | :--- | :--- |\n"
 
-            for fund, monthly_alloc in sip_rows:
-                pct = (monthly_alloc / sip_monthly_amount) * 100
-                md_content += f"| {fund} | **₹{monthly_alloc:,.2f}** | {pct:.1f}% |\n"
+            for sip in transfer_plan.sip_allocations:
+                md_content += (
+                    f"| {sip.target_fund} | **₹{sip.monthly_amount:,.2f}** | "
+                    f"{sip.percentage_of_contribution:.1f}% |\n"
+                )
 
-            md_content += f"\n**Total Monthly SIP**: **₹{total_sip_monthly:,.2f}**\n\n"
+            md_content += f"\n**Total Monthly SIP**: **₹{transfer_plan.sip_monthly_total:,.2f}**\n\n"
         else:
             md_content += "#### Monthly SIP Investment Plan\n"
             md_content += "> **Note**: No SIP monthly amount specified. Provide a monthly contribution amount to generate a fund-wise SIP plan.\n\n"
@@ -262,18 +250,19 @@ target allocation calculated using Maximum Sharpe Ratio optimization:
 
         md_content += "#### Lump Sum Investment Required\n"
         md_content += "| Metric | Amount |\n| :--- | :--- |\n"
-        md_content += f"| **Additional Capital Needed** | **₹{lump_sum_needed:,.2f}** |\n"
-        md_content += f"| **Total Portfolio After Lump Sum** | **₹{total_projected + lump_sum_needed:,.2f}** |\n\n"
+        md_content += f"| **Additional Capital Needed** | **₹{transfer_plan.lump_sum_total:,.2f}** |\n"
+        md_content += f"| **Total Portfolio After Lump Sum** | **₹{total_projected + transfer_plan.lump_sum_total:,.2f}** |\n\n"
 
         md_content += "#### Fund-wise Lump Sum Allocation\n"
         md_content += "| Target Fund | Lump Sum Amount | % of Lump Sum |\n"
         md_content += "| :--- | :--- | :--- |\n"
 
-        if lump_sum_needed > 0:
-            for row in allocation_rows:
-                if row["val_diff"] > 0:
-                    pct = (row["val_diff"] / lump_sum_needed) * 100
-                    md_content += f"| {row['fund']} | **₹{row['val_diff']:,.2f}** | {pct:.1f}% |\n"
+        if transfer_plan.lump_sum_allocations:
+            for alloc in transfer_plan.lump_sum_allocations:
+                md_content += (
+                    f"| {alloc.target_fund} | **₹{alloc.amount:,.2f}** | "
+                    f"{alloc.percentage_of_total:.1f}% |\n"
+                )
         else:
             md_content += "| *No additional capital needed* | *—* | *—* |\n"
 

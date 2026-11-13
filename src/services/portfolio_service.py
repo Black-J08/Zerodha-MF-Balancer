@@ -24,7 +24,7 @@ import pandas as pd
 from src.allocation import Allocator
 from src.core.evaluation import EvaluationMode, EvaluationResult
 from src.core.logging import get_logger
-from src.core.models import FundExclusion
+from src.core.models import FundExclusion, TransferPlan
 from src.core.settings import Settings
 from src.data import DataEngine, DataPreparation
 from src.optimization import PortfolioOptimizer
@@ -253,15 +253,28 @@ class PortfolioService:
         allocator = Allocator(
             holdings_optimized, total_capital, optimal_weights, months
         )
-        transfers = allocator.calculate_transfers()
-        summary = allocator.get_summary(mode=mode)
+
+        if mode == EvaluationMode.MPT_OPTIMAL:
+            # New unified transfer plan with fund-to-fund STP, SIP, Lump Sum
+            transfer_plan = allocator.calculate_transfer_plan(
+                sip_monthly_amount=sip_monthly_amount,
+            )
+            summary = allocator.get_summary(mode=mode)
+        else:
+            # MASTER_FUND: existing behavior (debt fund as single source)
+            transfers = allocator.calculate_transfers()
+            summary = allocator.get_summary(mode=mode)
+            # Convert to unified TransferPlan for consistent reporter interface
+            transfer_plan = _master_fund_to_transfer_plan(
+                transfers, months, total_capital, sip_monthly_amount
+            )
 
         # --- 8. Report ---
         reporter = Reporter(self.settings)
         report_path = reporter.generate_report(
+            transfer_plan,
             summary,
             optimal_weights,
-            transfers,
             duration=months,
             current_stats=current_stats,
             optimized_stats=optimized_stats,
@@ -277,7 +290,7 @@ class PortfolioService:
             current_weights=current_weights,
             optimized_stats=optimized_stats,
             current_stats=current_stats,
-            transfers=transfers,
+            transfers=transfer_plan,
             summary=summary,
             report_path=report_path,
             excluded_funds=excluded_funds,
@@ -285,3 +298,89 @@ class PortfolioService:
             total_capital=total_capital,
             months=months,
         )
+
+
+def _master_fund_to_transfer_plan(
+    transfers: dict[str, float],
+    months: int,
+    total_capital: float,
+    sip_monthly_amount: float | None = None,
+) -> TransferPlan:
+    """Convert MASTER_FUND transfers dict to a unified TransferPlan.
+
+    MASTER_FUND mode uses the debt fund as a single source for all transfers.
+    This wraps the existing dict-based output into the unified TransferPlan
+    structure for consistent reporter handling.
+
+    Args:
+        transfers: Dict of {target_fund_name: monthly_amount} from
+            Allocator.calculate_transfers().
+        months: Planning horizon in months.
+        total_capital: Total capital (debt fund value) used as the basis.
+        sip_monthly_amount: Optional monthly SIP contribution amount.
+
+    Returns:
+        TransferPlan with STP transfers from "Master Debt Fund" source.
+    """
+    from src.core.models import LumpSumAllocation, SIPAllocation, STPTransfer
+
+    stp_transfers: list[STPTransfer] = []
+    stp_monthly_total = 0.0
+
+    for target_fund, monthly_amount in sorted(
+        transfers.items(), key=lambda item: item[1], reverse=True
+    ):
+        if monthly_amount > 0:
+            total_amount = monthly_amount * months
+            stp_transfers.append(
+                STPTransfer(
+                    source_fund="Master Debt Fund",
+                    target_fund=target_fund,
+                    monthly_amount=round(monthly_amount, 2),
+                    duration_months=months,
+                    total_amount=round(total_amount, 2),
+                )
+            )
+            stp_monthly_total += monthly_amount
+
+    # SIP allocations for MASTER_FUND: distribute to all targets proportionally
+    sip_allocations: list[SIPAllocation] = []
+    sip_monthly_total = 0.0
+    if sip_monthly_amount and sip_monthly_amount > 0 and stp_transfers:
+        total_stp = sum(t.monthly_amount for t in stp_transfers)
+        if total_stp > 0:
+            for stp in stp_transfers:
+                ratio = stp.monthly_amount / total_stp
+                monthly_alloc = ratio * sip_monthly_amount
+                pct = (monthly_alloc / sip_monthly_amount) * 100
+                sip_allocations.append(
+                    SIPAllocation(
+                        target_fund=stp.target_fund,
+                        monthly_amount=round(monthly_alloc, 2),
+                        percentage_of_contribution=round(pct, 1),
+                    )
+                )
+            sip_monthly_total = sip_monthly_amount
+
+    # Lump Sum: not applicable for MASTER_FUND (uses existing capital)
+    lump_sum_allocations: list[LumpSumAllocation] = []
+    lump_sum_total = 0.0
+
+    warnings: list[str] = []
+    if not stp_transfers:
+        warnings.append(
+            "No STP transfers needed. Allocation is currently on target."
+        )
+
+    return TransferPlan(
+        stp_transfers=stp_transfers,
+        stp_monthly_total=round(stp_monthly_total, 2),
+        stp_duration_months=months,
+        sip_allocations=sip_allocations,
+        sip_monthly_total=round(sip_monthly_total, 2),
+        lump_sum_allocations=lump_sum_allocations,
+        lump_sum_total=round(lump_sum_total, 2),
+        shortfall_warnings=warnings,
+        total_portfolio_value=total_capital,
+        threshold_used=0.0,
+    )

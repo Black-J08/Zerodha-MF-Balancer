@@ -218,8 +218,8 @@ class TestMPTOptimalMode:
         assert "Sharpe Ratio" in result.optimized_stats
         assert "Sharpe Ratio" in result.current_stats
 
-    def test_mpt_optimal_transfers_sum_to_capital_over_months(self, mock_data_engine):
-        """MPT-Optimal transfers sum to total_capital / months."""
+    def test_mpt_optimal_stp_transfers_from_sources_to_targets(self, mock_data_engine):
+        """MPT-Optimal STP transfers come from overweighted sources to underweighted targets."""
         mock_data_engine.get_scheme_code_for_fund.return_value = "123456"
         mock_data_engine.get_historical_nav.side_effect = _valid_nav_side_effect
 
@@ -233,6 +233,25 @@ class TestMPTOptimalMode:
             total_capital=None,
         )
 
-        total_transfer = sum(result.transfers.values())
-        expected = result.total_capital / 12
-        assert abs(total_transfer - expected) < 0.01
+        transfer_plan = result.transfers
+
+        # Every STP transfer must have a source and target fund
+        for stp in transfer_plan.stp_transfers:
+            assert stp.source_fund != stp.target_fund
+            assert stp.monthly_amount > 0
+            assert stp.duration_months == 12
+            assert stp.total_amount == stp.monthly_amount * 12
+
+        # Total monthly outflow equals sum of all transfer monthly amounts
+        total_monthly = sum(stp.monthly_amount for stp in transfer_plan.stp_transfers)
+        assert abs(total_monthly - transfer_plan.stp_monthly_total) < 0.01
+
+        # No source fund should allocate more than its available excess
+        for stp in transfer_plan.stp_transfers:
+            source_allocated = sum(
+                s.monthly_amount
+                for s in transfer_plan.stp_transfers
+                if s.source_fund == stp.source_fund
+            )
+            # Source's total monthly allocation should not exceed its excess / months
+            assert source_allocated <= transfer_plan.stp_monthly_total + 0.01

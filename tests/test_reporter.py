@@ -8,6 +8,7 @@ import os
 import pytest
 
 from src.core.evaluation import EvaluationMode
+from src.core.models import FundExclusion, LumpSumAllocation, SIPAllocation, STPTransfer, TransferPlan
 from src.core.settings import Settings
 from src.reporting import Reporter
 
@@ -19,6 +20,62 @@ def config(tmp_path, monkeypatch):
     monkeypatch.setenv("KITE_API_SECRET", "test_secret")
     monkeypatch.chdir(tmp_path)
     return Settings.from_env()
+
+
+def _make_transfer_plan(mode=EvaluationMode.MASTER_FUND):
+    """Create a sample TransferPlan for testing."""
+    stp_transfers = [
+        STPTransfer(
+            source_fund="Master Debt Fund" if mode == EvaluationMode.MASTER_FUND else "Fund A",
+            target_fund="Fund B",
+            monthly_amount=2500.0,
+            duration_months=12,
+            total_amount=30000.0,
+        ),
+        STPTransfer(
+            source_fund="Master Debt Fund" if mode == EvaluationMode.MASTER_FUND else "Fund A",
+            target_fund="Fund C",
+            monthly_amount=1666.67,
+            duration_months=12,
+            total_amount=20000.0,
+        ),
+    ]
+    sip_allocations = [
+        SIPAllocation(
+            target_fund="Fund B",
+            monthly_amount=1000.0,
+            percentage_of_contribution=50.0,
+        ),
+        SIPAllocation(
+            target_fund="Fund C",
+            monthly_amount=1000.0,
+            percentage_of_contribution=50.0,
+        ),
+    ]
+    lump_sum_allocations = [
+        LumpSumAllocation(
+            target_fund="Fund B",
+            amount=5000.0,
+            percentage_of_total=50.0,
+        ),
+        LumpSumAllocation(
+            target_fund="Fund C",
+            amount=5000.0,
+            percentage_of_total=50.0,
+        ),
+    ]
+    return TransferPlan(
+        stp_transfers=stp_transfers,
+        stp_monthly_total=4166.67,
+        stp_duration_months=12,
+        sip_allocations=sip_allocations,
+        sip_monthly_total=2000.0,
+        lump_sum_allocations=lump_sum_allocations,
+        lump_sum_total=10000.0,
+        shortfall_warnings=[],
+        total_portfolio_value=200000.0,
+        threshold_used=200.0,
+    )
 
 
 class TestReporter:
@@ -34,12 +91,12 @@ class TestReporter:
             "Total_Projected": 200000.0,
         }
         optimal_weights = {"Fund A": 0.6, "Fund B": 0.4}
-        transfers = {"Fund A": 2500.0, "Fund B": 1666.67}
+        transfer_plan = _make_transfer_plan(EvaluationMode.MASTER_FUND)
 
         filepath = reporter.generate_report(
+            transfer_plan,
             allocator_summary,
             optimal_weights,
-            transfers,
             duration=12,
             mode=EvaluationMode.MASTER_FUND,
         )
@@ -74,7 +131,7 @@ class TestReporter:
             "Total_Projected": 200000.0,
         }
         optimal_weights = {"Fund A": 0.6, "Fund B": 0.4}
-        transfers = {"Fund A": 2500.0}
+        transfer_plan = _make_transfer_plan(EvaluationMode.MASTER_FUND)
         current_stats = {
             "Expected Return": 0.10,
             "Volatility": 0.15,
@@ -91,9 +148,9 @@ class TestReporter:
         }
 
         filepath = reporter.generate_report(
+            transfer_plan,
             allocator_summary,
             optimal_weights,
-            transfers,
             duration=12,
             current_stats=current_stats,
             optimized_stats=optimized_stats,
@@ -117,12 +174,23 @@ class TestReporter:
             "Total_Projected": 250000.0,
         }
         optimal_weights = {"Fund A": 0.8, "Fund B": 0.2}
-        transfers = {"Fund A": 0.0, "Fund B": 0.0}
+        empty_transfer_plan = TransferPlan(
+            stp_transfers=[],
+            stp_monthly_total=0.0,
+            stp_duration_months=12,
+            sip_allocations=[],
+            sip_monthly_total=0.0,
+            lump_sum_allocations=[],
+            lump_sum_total=0.0,
+            shortfall_warnings=[],
+            total_portfolio_value=250000.0,
+            threshold_used=250.0,
+        )
 
         filepath = reporter.generate_report(
+            empty_transfer_plan,
             allocator_summary,
             optimal_weights,
-            transfers,
             duration=12,
             mode=EvaluationMode.MASTER_FUND,
         )
@@ -142,12 +210,12 @@ class TestReporter:
             "Total_Projected": 300000.0,
         }
         optimal_weights = {"Fund A": 0.6, "Fund B": 0.4}
-        transfers = {"Fund A": 2500.0, "Fund B": 1666.67}
+        transfer_plan = _make_transfer_plan(EvaluationMode.MPT_OPTIMAL)
 
         filepath = reporter.generate_report(
+            transfer_plan,
             allocator_summary,
             optimal_weights,
-            transfers,
             duration=12,
             mode=EvaluationMode.MPT_OPTIMAL,
         )
@@ -171,12 +239,12 @@ class TestReporter:
         }
         optimal_weights = {"Fund A": 0.6, "Fund B": 0.4}
         current_weights = {"Fund A": 0.5, "Fund B": 0.5}
-        transfers = {"Fund A": 2500.0, "Fund B": 1666.67}
+        transfer_plan = _make_transfer_plan(EvaluationMode.MASTER_FUND)
 
         filepath = reporter.generate_report(
+            transfer_plan,
             allocator_summary,
             optimal_weights,
-            transfers,
             duration=12,
             current_weights=current_weights,
             mode=EvaluationMode.MASTER_FUND,
@@ -203,12 +271,12 @@ class TestReporter:
             "Total_Projected": 200000.0,
         }
         optimal_weights = {"Fund A": 0.6, "Fund B": 0.4}
-        transfers = {"Fund A": 2500.0, "Fund B": 1666.67}
+        transfer_plan = _make_transfer_plan(EvaluationMode.MASTER_FUND)
 
         filepath = reporter.generate_report(
+            transfer_plan,
             allocator_summary,
             optimal_weights,
-            transfers,
             duration=12,
             mode=EvaluationMode.MASTER_FUND,
         )
@@ -239,9 +307,7 @@ class TestReporter:
         }
         optimal_weights = {"Fund A": 0.6, "Fund B": 0.4}
         current_weights = {"Fund A": 0.5, "Fund B": 0.5, "Fund C": 0.0}
-        transfers = {"Fund A": 2500.0, "Fund B": 1666.67}
-        from src.core.models import FundExclusion
-
+        transfer_plan = _make_transfer_plan(EvaluationMode.MASTER_FUND)
         excluded_funds = [
             FundExclusion(
                 fund_name="Fund C",
@@ -251,9 +317,9 @@ class TestReporter:
         ]
 
         filepath = reporter.generate_report(
+            transfer_plan,
             allocator_summary,
             optimal_weights,
-            transfers,
             duration=12,
             current_weights=current_weights,
             excluded_funds=excluded_funds,
