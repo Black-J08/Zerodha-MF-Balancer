@@ -70,6 +70,7 @@ class PortfolioService:
         weight_bounds: tuple[float, float] = (0.0, 1.0),
         source_fund_name: str | None = None,
         total_capital: float | None = None,
+        sip_monthly_amount: float | None = None,
     ) -> EvaluationResult:
         """Run the complete portfolio evaluation workflow.
 
@@ -83,6 +84,8 @@ class PortfolioService:
             total_capital: Total capital to use as the rebalancing basis.
                 If None, derived from the mode (master fund value for
                 MASTER_FUND, total portfolio value for MPT_OPTIMAL).
+            sip_monthly_amount: Optional monthly SIP contribution amount (INR).
+                Passed to the reporter for the SIP execution strategy section.
 
         Returns:
             EvaluationResult containing all computed outputs.
@@ -229,12 +232,29 @@ class PortfolioService:
         }
         current_stats = optimizer.get_advanced_stats(current_weights)
 
+        # --- 4b. Identify zero-weight funds for excluded funds reporting ---
+        # Funds currently held but assigned 0% optimal weight are excluded
+        # from the optimized portfolio and should appear in the excluded list.
+        ZERO_WEIGHT_THRESHOLD = 0.001
+        for fund_name in current_weights:
+            if optimal_weights.get(fund_name, 0.0) < ZERO_WEIGHT_THRESHOLD:
+                excluded_funds.append(
+                    FundExclusion(
+                        fund_name=fund_name,
+                        reason="Zero optimal weight",
+                        detail=(
+                            "Receives 0% allocation in the optimized portfolio; "
+                            "not included in target allocation"
+                        ),
+                    )
+                )
+
         # --- 7. Allocate ---
         allocator = Allocator(
             holdings_optimized, total_capital, optimal_weights, months
         )
         transfers = allocator.calculate_transfers()
-        summary = allocator.get_summary()
+        summary = allocator.get_summary(mode=mode)
 
         # --- 8. Report ---
         reporter = Reporter(self.settings)
@@ -245,8 +265,10 @@ class PortfolioService:
             duration=months,
             current_stats=current_stats,
             optimized_stats=optimized_stats,
+            current_weights=current_weights,
             excluded_funds=excluded_funds,
             mode=mode,
+            sip_monthly_amount=sip_monthly_amount,
         )
 
         return EvaluationResult(

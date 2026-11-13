@@ -297,3 +297,39 @@ def test_no_fund_in_both_excluded_and_valid(mock_data_engine):
     assert "FUND_A" in excluded_names
     assert "FUND_A" not in result.valid_funds
     assert set(result.valid_funds).isdisjoint(excluded_names)
+
+
+def test_excluded_funds_includes_zero_weight_funds(mock_data_engine):
+    """Regression: funds with 0% optimal weight appear in excluded_funds."""
+    # All funds have valid scheme codes and NAV data
+    mock_data_engine.get_scheme_code_for_fund.return_value = "123456"
+    mock_data_engine.get_historical_nav.return_value = _make_nav_series(100)
+
+    service = PortfolioService.__new__(PortfolioService)
+    service.settings = MagicMock()
+    service.data_engine = mock_data_engine
+    service.settings.data_dir = "/tmp/mf_balancer_test"
+    service.settings.reports_dir = "/tmp/mf_balancer_test/reports"
+
+    result = service.evaluate(
+        mode=EvaluationMode.MPT_OPTIMAL,
+        months=12,
+        risk_free_rate=0.07,
+        source_fund_name=None,
+        total_capital=10000.0,
+    )
+
+    # At least one fund should have 0 weight (concentrated MPT portfolio)
+    zero_weight_funds = [
+        f for f in result.valid_funds if result.weights.get(f, 0.0) < 0.001
+    ]
+    if zero_weight_funds:
+        excluded_names = {e.fund_name for e in result.excluded_funds}
+        for fund in zero_weight_funds:
+            assert fund in excluded_names, (
+                f"Zero-weight fund {fund} not in excluded_funds"
+            )
+            exclusion = next(
+                e for e in result.excluded_funds if e.fund_name == fund
+            )
+            assert exclusion.reason == "Zero optimal weight"

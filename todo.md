@@ -5,15 +5,14 @@
 - exit load support
 - monte carlo simulation
 - multiple statistical validations
-- improve output (ideal target allocation, from master fund[STPs], or SIPs, etc)
 - tax, costing and slippage calculation if possible
 - assets overlapping into consideration and eliminate similar funds if possible
 - investment risk tolerance (how much risk can the investor take)
 - PDF report with comparison and plots rather than MD file
 - option to include more mutual funds into consideration rather than the current portfolio only
 - option to recommend new mutual funds as per the current portfolio to improve results or diversify risk yet not recommending similar funds
-- ensure correct statistical calculations across the entire project
 - improve the report and output into something more informative and familiar for user
 - determine over-weighted fund in the portfolio which can be reduced from
 - minimum time period threshold - exclude new funds along with their capital (exclude that funds' capital also)
-- currently choosing master fund, another evaluation without master fund and exact ideal MPT portfolio with max sharpe and a report generated then
+- incorrect values in reports generated
+- ensure correct statistical calculations across the entire project, currently incorrect financial/statistical calculations across project, correct them

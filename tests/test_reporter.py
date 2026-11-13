@@ -52,10 +52,17 @@ class TestReporter:
 
         assert "# Mutual Fund Rebalancing Report" in content
         assert "Executive Summary" in content
-        assert "Optimal Allocation (MPT)" in content
+        assert "Portfolio Allocation Comparison" in content
+        assert "Current Weight" in content
+        assert "Optimal Weight" in content
+        assert "Target Value" in content
+        assert "Action" in content
         assert "Fund A" in content
         assert "Fund B" in content
-        assert "Monthly Rebalancing Plan" in content
+        assert "Execution Strategy Options" in content
+        assert "Option 1: STP" in content
+        assert "Option 2: SIP" in content
+        assert "Option 3: Lump Sum" in content
 
     def test_generate_report_with_stats(self, config):
         """Test report generation with current and optimized stats."""
@@ -152,3 +159,110 @@ class TestReporter:
         assert "Total Portfolio" in content
         assert "Debt Capital Source" not in content
         assert "Master Debt Fund" not in content
+
+    def test_generate_report_shows_current_vs_optimal_allocation(self, config):
+        """Report includes a current-vs-optimal allocation comparison table."""
+        reporter = Reporter(config)
+
+        allocator_summary = {
+            "Total_Equity": 150000.0,
+            "Total_Capital": 50000.0,
+            "Total_Projected": 200000.0,
+        }
+        optimal_weights = {"Fund A": 0.6, "Fund B": 0.4}
+        current_weights = {"Fund A": 0.5, "Fund B": 0.5}
+        transfers = {"Fund A": 2500.0, "Fund B": 1666.67}
+
+        filepath = reporter.generate_report(
+            allocator_summary,
+            optimal_weights,
+            transfers,
+            duration=12,
+            current_weights=current_weights,
+            mode=EvaluationMode.MASTER_FUND,
+        )
+
+        with open(filepath) as f:
+            content = f.read()
+
+        assert "Portfolio Allocation Comparison" in content
+        assert "Current Weight" in content
+        assert "Optimal Weight" in content
+        assert "Difference" in content
+        assert "Current Value" in content
+        assert "Target Value" in content
+        assert "Action" in content
+
+    def test_generate_report_shows_three_execution_strategies(self, config):
+        """Report includes three execution strategies ordered by recommendation."""
+        reporter = Reporter(config)
+
+        allocator_summary = {
+            "Total_Equity": 150000.0,
+            "Total_Capital": 50000.0,
+            "Total_Projected": 200000.0,
+        }
+        optimal_weights = {"Fund A": 0.6, "Fund B": 0.4}
+        transfers = {"Fund A": 2500.0, "Fund B": 1666.67}
+
+        filepath = reporter.generate_report(
+            allocator_summary,
+            optimal_weights,
+            transfers,
+            duration=12,
+            mode=EvaluationMode.MASTER_FUND,
+        )
+
+        with open(filepath) as f:
+            content = f.read()
+
+        assert "Execution Strategy Options" in content
+        # STP first (Recommended)
+        stp_pos = content.find("Option 1: STP")
+        sip_pos = content.find("Option 2: SIP")
+        lump_pos = content.find("Option 3: Lump Sum")
+        assert stp_pos != -1
+        assert sip_pos != -1
+        assert lump_pos != -1
+        assert stp_pos < sip_pos < lump_pos
+        assert "Recommended" in content[stp_pos:sip_pos]
+        assert "Least Recommended" in content[lump_pos:]
+
+    def test_generate_report_includes_zero_weight_excluded_funds(self, config):
+        """Report's Excluded Funds section lists zero-weight funds with reason."""
+        reporter = Reporter(config)
+
+        allocator_summary = {
+            "Total_Equity": 150000.0,
+            "Total_Capital": 50000.0,
+            "Total_Projected": 200000.0,
+        }
+        optimal_weights = {"Fund A": 0.6, "Fund B": 0.4}
+        current_weights = {"Fund A": 0.5, "Fund B": 0.5, "Fund C": 0.0}
+        transfers = {"Fund A": 2500.0, "Fund B": 1666.67}
+        from src.core.models import FundExclusion
+
+        excluded_funds = [
+            FundExclusion(
+                fund_name="Fund C",
+                reason="Zero optimal weight",
+                detail="Receives 0% allocation in the optimized portfolio; not included in target allocation",
+            )
+        ]
+
+        filepath = reporter.generate_report(
+            allocator_summary,
+            optimal_weights,
+            transfers,
+            duration=12,
+            current_weights=current_weights,
+            excluded_funds=excluded_funds,
+            mode=EvaluationMode.MASTER_FUND,
+        )
+
+        with open(filepath) as f:
+            content = f.read()
+
+        assert "Excluded Funds" in content
+        assert "Fund C" in content
+        assert "Zero optimal weight" in content

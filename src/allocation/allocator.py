@@ -6,6 +6,7 @@ Implements Target Duration Convergence rebalancing logic:
    (target value - current value).
 """
 
+from src.core.evaluation import EvaluationMode
 from src.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -80,15 +81,29 @@ class Allocator:
 
         return transfers
 
-    def get_summary(self) -> dict:
+    def get_summary(self, mode: EvaluationMode = EvaluationMode.MASTER_FUND) -> dict:
         """Return a summary dict of the allocation.
+
+        Args:
+            mode: The :class:`EvaluationMode` used. For MPT_OPTIMAL,
+                ``total_capital`` already equals the full portfolio value,
+                so ``Total_Projected`` must not double-count it.
 
         Returns:
             Dict with Total_Equity, Total_Capital, Total_Projected.
         """
+        total_equity = sum(self.current_holdings.values())
+        if mode == EvaluationMode.MPT_OPTIMAL:
+            # In MPT_OPTIMAL mode, total_capital == total portfolio value,
+            # so Total_Projected is just total_capital (no double-counting).
+            total_projected = self.total_capital
+        else:
+            # In MASTER_FUND mode, total_capital is the master debt fund
+            # value, so Total_Projected = equity + debt capital.
+            total_projected = total_equity + self.total_capital
+
         return {
-            "Total_Equity": sum(self.current_holdings.values()),
+            "Total_Equity": total_equity,
             "Total_Capital": self.total_capital,
-            "Total_Projected": sum(self.current_holdings.values())
-            + self.total_capital,
+            "Total_Projected": total_projected,
         }

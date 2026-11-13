@@ -29,6 +29,9 @@ def advise(
     ),
     months: int = typer.Option(12, help="Number of months to deploy the capital"),
     risk_factor: float = typer.Option(0.07, help="Risk free rate for Sharpe Ratio (decimal)"),
+    sip_monthly: float | None = typer.Option(
+        None, help="Monthly SIP contribution amount (INR) for SIP execution strategy"
+    ),
 ) -> None:
     """Run the Mutual Fund Balancer in Advisory Mode."""
     config = Settings.from_env()
@@ -140,6 +143,7 @@ def advise(
                 source_fund_name=source_fund_name,
                 total_capital=debt_capital,
                 weight_bounds=weight_bounds,
+                sip_monthly_amount=sip_monthly,
             )
         except ValueError as e:
             console.print(f"[bold red]Error:[/bold red] {e}")

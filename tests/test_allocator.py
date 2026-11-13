@@ -5,6 +5,7 @@ and edge cases.
 """
 
 from src.allocation import Allocator
+from src.core.evaluation import EvaluationMode
 
 
 class TestAllocator:
@@ -76,6 +77,27 @@ class TestAllocator:
         assert summary["Total_Equity"] == 150000.0
         assert summary["Total_Capital"] == 50000.0
         assert summary["Total_Projected"] == 200000.0
+
+    def test_get_summary_mpt_optimal_no_double_count(self):
+        """Regression: MPT_OPTIMAL mode must not double-count total_capital.
+
+        In MPT_OPTIMAL mode, total_capital already equals the full portfolio
+        value, so Total_Projected must equal total_capital (not equity + capital).
+        """
+        current_holdings = {"Fund A": 100000.0, "Fund B": 50000.0}
+        total_capital = sum(current_holdings.values())  # 150000.0 == full portfolio
+        optimal_weights = {"Fund A": 0.6, "Fund B": 0.4}
+
+        allocator = Allocator(
+            current_holdings, total_capital, optimal_weights, 12
+        )
+        summary = allocator.get_summary(mode=EvaluationMode.MPT_OPTIMAL)
+
+        assert summary["Total_Equity"] == 150000.0
+        assert summary["Total_Capital"] == 150000.0
+        # Total_Projected must NOT be 300000.0 (double-counted); it must be 150000.0
+        assert summary["Total_Projected"] == 150000.0
+        assert summary["Total_Projected"] != 300000.0
 
     def test_remaining_months_min_one(self):
         """Test that remaining_months is at least 1."""
